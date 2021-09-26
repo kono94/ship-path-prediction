@@ -14,13 +14,16 @@ import deeprl.common.util as  util
 from deeprl.common.normalize_actions import NormalizedActions
 from deeprl.agents.ddpg.ddpp import DDPG
 from deeprl.common.evaluator import Evaluator
+from deeprl.common.visualizer import Visualizer
 
-def train(num_iterations, agent, env,  evaluate, validate_steps, output, max_episode_length=None, debug=True):
-
+def train(num_iterations, agent, env,  evaluate, visualize, validate_steps, output, max_episode_length=None, debug=True):
+    
     agent.is_training = True
     step = episode = episode_steps = 0
     episode_reward = 0.
     current_state = None
+    episode_reward_history = []
+
     while step < num_iterations:
         # reset if it is the start of episode
         if current_state is None:
@@ -33,6 +36,7 @@ def train(num_iterations, agent, env,  evaluate, validate_steps, output, max_epi
         else:
             action = agent.select_action(current_state)
         
+        #env.render()
         
         # env response with next_observation, reward, terminate_info
         next_state, reward, done, info = env.step(action)
@@ -42,12 +46,6 @@ def train(num_iterations, agent, env,  evaluate, validate_steps, output, max_epi
         if step > args.warmup and step % 20:
             agent.update_policy()
         
-        # [optional] evaluate
-        if evaluate is not None and validate_steps > 0 and step % validate_steps == 0:
-            policy = lambda x: agent.select_action(x, decay_epsilon=False)
-            validate_reward = evaluate(env, policy, debug=True, visualize=True)
-            if debug: util.prYellow('[Evaluate] Step_{:07d}: mean_reward:{}'.format(step, validate_reward))
-
         # [optional] save intermideate model
         if step % int(num_iterations/3) == 0:
             agent.save_model(output)
@@ -57,9 +55,19 @@ def train(num_iterations, agent, env,  evaluate, validate_steps, output, max_epi
         episode_steps += 1
         episode_reward += reward
         current_state = deepcopy(next_state)
-
+        
         if done or (max_episode_length and episode_steps >= max_episode_length -1): # end of episode
             if debug: util.prGreen(f'#{episode}: episode_reward:{episode_reward} steps:{step}')
+            episode_reward_history.append(episode_reward)
+              # [optional] evaluate
+            if evaluate is not None and 1==2:
+                policy = lambda x: agent.select_action(x, decay_epsilon=False)
+                validate_reward = evaluate(env, policy, agent, episode_reward_history, debug=True, visualize=True)
+                if debug: util.prYellow('[Evaluate] Step_{:07d}: mean_reward:{}'.format(step, validate_reward))
+
+            if visualize is not None:
+                visualize(env, agent, episode_reward_history)
+
             # reset
             current_state = None
             episode_steps = 0
@@ -129,8 +137,9 @@ if __name__ == "__main__":
     evaluate = Evaluator(args.validate_episodes, 
         args.validate_steps, args.output, max_episode_length=args.max_episode_length)
 
+    visualize = Visualizer(args.output)
     if args.mode == 'train':
-        train(args.train_iter, agent, env, evaluate, 
+        train(args.train_iter, agent, env, evaluate, visualize,
             args.validate_steps, args.output, max_episode_length=args.max_episode_length, debug=True)
 
     elif args.mode == 'test':

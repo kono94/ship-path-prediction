@@ -1,7 +1,10 @@
 import numpy as np
-import matplotlib.pyplot as plt
 from scipy.io import savemat
 import deeprl.common.util as util
+import matplotlib.pyplot as plt
+from tkinter import *
+import threading
+
 
 class Evaluator(object):
 
@@ -12,7 +15,7 @@ class Evaluator(object):
         self.save_path = save_path
         self.results = np.array([]).reshape(num_episodes,0)
 
-    def __call__(self, env, policy, debug=True, visualize=False, save=True):
+    def __call__(self, env, policy, agent, episode_reward_history, debug=True, visualize=False, save=True):
 
         self.is_training = False
         observation = None
