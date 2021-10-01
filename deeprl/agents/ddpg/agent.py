@@ -99,7 +99,7 @@ class DDPG(object):
                 next_q_values = self.critic_target([next_state_batch, target_actions])
             
             # r + gamma * Q, if not terminal
-            target_q_batch = reward_batch + self.discount * next_q_values * terminal_batch
+            target_q_batch = reward_batch + self.discount * next_q_values * (1 - terminal_batch)
             
             
             # critic update
@@ -128,7 +128,12 @@ class DDPG(object):
             self.actor_target.eval()
             self.critic.eval()
             self.critic_target.eval()
-        
+        def train(self):
+            self.actor.train()
+            self.actor_target.train()
+            self.critic.train()
+            self.critic_target.train()
+
         
         def random_action(self):
             return np.random.uniform(-1.,1.,self.nr_of_actions)
@@ -136,7 +141,8 @@ class DDPG(object):
         
         def select_action(self, s_t, decay_epsilon=True):
             action = self.actor(torch.as_tensor(s_t, dtype=torch.float32)).detach().numpy()
-            action += self.is_training * max(self.epsilon, 0) * self.random_process.noise()
+            action += self.is_training * self.random_process.noise()
+            # max(self.epsilon, 0) 
             action = np.clip(action, -1., 1.)
             if decay_epsilon:
                 self.epsilon -= self.depsilon

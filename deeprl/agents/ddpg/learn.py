@@ -12,7 +12,7 @@ import time
 import networks
 import deeprl.common.util as  util
 from deeprl.common.normalize_actions import NormalizedActions
-from deeprl.agents.ddpg.ddpp import DDPG
+from deeprl.agents.ddpg.agent import DDPG
 from deeprl.common.evaluator import Evaluator
 from deeprl.common.visualizer import Visualizer
 
@@ -27,7 +27,7 @@ def train(num_iterations, agent, env,  evaluate, visualize, validate_steps, outp
     while step < num_iterations:
         # reset if it is the start of episode
         if current_state is None:
-            current_state = deepcopy(env.reset())
+            current_state = util.preprocess_state(deepcopy(env.reset()))
             agent.reset()
 
         # agent pick action ...
@@ -35,20 +35,21 @@ def train(num_iterations, agent, env,  evaluate, visualize, validate_steps, outp
             action = agent.random_action()
         else:
             action = agent.select_action(current_state)
-        
-        #env.render()
+            #print(action)
+            env.render()
         
         # env response with next_observation, reward, terminate_info
         next_state, reward, done, info = env.step(action)
-        
+        next_state = util.preprocess_state(deepcopy(next_state))
+        #print(next_state)
         # agent stores transition and update policy
         agent.remember(current_state, action, reward, next_state, done)
-        if step > args.warmup and step % 20:
+        if step > args.warmup:
             agent.update_policy()
         
         # [optional] save intermideate model
-        if step % int(num_iterations/3) == 0:
-            agent.save_model(output)
+       # if step % int(num_iterations/3) == 0:
+        #    agent.save_model(output)
 
         # update 
         step += 1
@@ -65,8 +66,8 @@ def train(num_iterations, agent, env,  evaluate, visualize, validate_steps, outp
                 validate_reward = evaluate(env, policy, agent, episode_reward_history, debug=True, visualize=True)
                 if debug: util.prYellow('[Evaluate] Step_{:07d}: mean_reward:{}'.format(step, validate_reward))
 
-            if visualize is not None:
-                visualize(env, agent, episode_reward_history)
+            #if visualize is not None and step > args.warmup:
+             #   visualize(env, agent, episode_reward_history)
 
             # reset
             current_state = None
@@ -95,19 +96,19 @@ if __name__ == "__main__":
     parser.add_argument('--env', default=1, type=int, help='Environment; 1=cartpole, 2=line following')
     parser.add_argument('--hidden1', default=100, type=int, help='hidden num of first fully connect layer')
     parser.add_argument('--hidden2', default=50, type=int, help='hidden num of second fully connect layer')
-    parser.add_argument('--actor_lr_rate', default=0.001, type=float, help='actor net learning rate')
-    parser.add_argument('--critic_lr_rate', default=0.0001, type=float, help='critic net learning rate')
-    parser.add_argument('--warmup', default=100, type=int, help='time without training but only filling the replay memory')
+    parser.add_argument('--actor_lr_rate', default=0.05, type=float, help='actor net learning rate')
+    parser.add_argument('--critic_lr_rate', default=0.005, type=float, help='critic net learning rate')
+    parser.add_argument('--warmup', default=1000, type=int, help='time without training but only filling the replay memory')
     parser.add_argument('--discount', default=0.99, type=float, help='')
     parser.add_argument('--batch_size', default=64, type=int, help='batch size')
-    parser.add_argument('--replay_max_size', default=5000, type=int, help='replay buffer size')
+    parser.add_argument('--replay_max_size', default=50000, type=int, help='replay buffer size')
     parser.add_argument('--window_length', default=1, type=int, help='')
     parser.add_argument('--target_update_rate', default=0.1, type=float, help='moving average for target network; TAU')
     parser.add_argument('--theta', default=0.15, type=float, help='noise theta')
     parser.add_argument('--sigma', default=0.2, type=float, help='noise sigma') 
     parser.add_argument('--mu', default=0.0, type=float, help='noise mu') 
     parser.add_argument('--validate_episodes', default=2, type=int, help='how many episode to perform during validate experiment')
-    parser.add_argument('--max_episode_length', default=500, type=int, help='')
+    parser.add_argument('--max_episode_length', default=500000, type=int, help='')
     parser.add_argument('--validate_steps', default=10000, type=int, help='how many steps to perform a validate experiment')
     parser.add_argument('--output', default='runs', type=str, help='')
     parser.add_argument('--debug', dest='debug', action='store_true')
@@ -123,7 +124,7 @@ if __name__ == "__main__":
     output = print(os.path.join(sys.path[1], 'runs'))
 
     if args.env == 1:
-        env = NormalizedActions(gym.make('MountainCarContinuous-v0'))
+        env = gym.make('MountainCarContinuous-v0')
 
     if args.seed > 0:
         np.random.seed(args.seed)
@@ -132,7 +133,7 @@ if __name__ == "__main__":
     nr_of_states = env.observation_space.shape[0]
     nr_of_actions = env.action_space.shape[0]
 
-
+    print(env.observation_space)
     agent = DDPG(nr_of_states, nr_of_actions, args)
     evaluate = Evaluator(args.validate_episodes, 
         args.validate_steps, args.output, max_episode_length=args.max_episode_length)

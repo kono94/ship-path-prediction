@@ -1,5 +1,7 @@
 import torch
 from torch.autograd import Variable
+import numpy as np
+
 
 USE_CUDA = torch.cuda.is_available()
 FLOAT = torch.cuda.FloatTensor if USE_CUDA else torch.FloatTensor
@@ -29,3 +31,11 @@ def soft_update(target, source, tau):
 def hard_update(target, source):
     for target_param, param in zip(target.parameters(), source.parameters()):
             target_param.data.copy_(param.data)
+
+
+def preprocess_state(state):
+    # mapping the state values to [-1,1]
+    s = np.array(state)
+    s[0] = ((state[0] + 1.2) / 1.8) * 2 - 1
+    s[1] = ((state[1] + 0.07) / 0.14) * 2 - 1
+    return s
