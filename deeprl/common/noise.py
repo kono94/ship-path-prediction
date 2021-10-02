@@ -2,10 +2,10 @@ import numpy as np
 from math import sqrt
 
 class OrnsteinUhlenbeckActionNoise:
-    def __init__(self, mu, sigma, theta=.15, dt=1e-2, x0=None):
+    def __init__(self, nr_of_actions, mu, sigma, theta=.15, dt=1e-2, x0=None):
         self.theta = theta
-        self.mu = mu
-        self.sigma = sigma
+        self.mu = mu * np.ones(nr_of_actions)
+        self.sigma = sigma * np.ones(nr_of_actions)
         self.dt = dt
         self.x0 = x0
         self.reset()

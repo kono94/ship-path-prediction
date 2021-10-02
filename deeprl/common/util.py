@@ -28,7 +28,7 @@ def soft_update(target, source, tau):
         target_param.data.mul_(1.0 - tau)
         target_param.data.add_(param.data * tau)
 
-def hard_update(target, source):
+def hard_update(source, target):
     for target_param, param in zip(target.parameters(), source.parameters()):
             target_param.data.copy_(param.data)
 
