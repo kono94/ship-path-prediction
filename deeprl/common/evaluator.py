@@ -4,27 +4,25 @@ import deeprl.common.util as util
 import matplotlib.pyplot as plt
 from tkinter import *
 import threading
-
+from copy import deepcopy
 
 class Evaluator(object):
 
-    def __init__(self, num_episodes, interval, save_path='', max_episode_length=None):
+    def __init__(self, num_episodes, save_path='', max_episode_length=None):
         self.num_episodes = num_episodes
         self.max_episode_length = max_episode_length
-        self.interval = interval
         self.save_path = save_path
         self.results = np.array([]).reshape(num_episodes,0)
 
-    def __call__(self, env, policy, agent, episode_reward_history, debug=True, visualize=False, save=True):
+    def __call__(self, env, policy, agent, episode_reward_history, visualize=False, save=True):
 
-        self.is_training = False
         observation = None
         result = []
 
         for episode in range(self.num_episodes):
 
             # reset at the start of episode
-            observation = env.reset()
+            observation = deepcopy(env.reset())
             episode_steps = 0
             episode_reward = 0.
                 
@@ -34,7 +32,7 @@ class Evaluator(object):
             done = False
             while not done:
                 # basic operation, action ,reward, blablabla ...
-                action = policy(observation)
+                action = agent.select_action(observation, pure=True)
 
                 observation, reward, done, info = env.step(action)
                 if self.max_episode_length and episode_steps >= self.max_episode_length -1:
@@ -47,7 +45,7 @@ class Evaluator(object):
                 episode_reward += reward
                 episode_steps += 1
 
-            if debug: util.prYellow('[Evaluate] #Episode{}: episode_reward:{}'.format(episode,episode_reward))
+            util.prYellow('[Evaluate] #Episode{}: episode_reward:{}'.format(episode,episode_reward))
             result.append(episode_reward)
 
         result = np.array(result).reshape(-1,1)
@@ -62,9 +60,9 @@ class Evaluator(object):
         y = np.mean(self.results, axis=0)
         error=np.std(self.results, axis=0)
                     
-        x = range(0,self.results.shape[1]*self.interval,self.interval)
-        fig, ax = plt.subplots(1, 1, figsize=(6, 5))
-        plt.xlabel('Timestep')
+        x = range(0,self.results.shape[1])
+        fig, ax = plt.subplots(1, 1, figsize=(7, 5))
+        plt.xlabel(f'Episode chunks (bundled by {self.num_episodes})')
         plt.ylabel('Average Reward')
         ax.errorbar(x, y, yerr=error, fmt='-o')
         plt.savefig(fn+'.png')

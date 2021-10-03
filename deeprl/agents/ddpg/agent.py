@@ -21,7 +21,6 @@ class DDPG(object):
     def __init__(self, nr_of_states: int, nr_of_actions: int, args) -> None:
         super().__init__()
 
-        self.set_seed(args.seed)
         self.nr_of_states = nr_of_states
         self.nr_of_actions = nr_of_actions
         self.batch_size = args.batch_size
@@ -118,9 +117,9 @@ class DDPG(object):
     def random_action(self):
         return np.random.uniform(-1.,1.,self.nr_of_actions)
     
-    def select_action(self, s_t, pure_action=False):
+    def select_action(self, s_t, pure=False):
         action = self.actor(torch.as_tensor(s_t, dtype=torch.float32)).detach().numpy()
-        if not pure_action:
+        if not pure:
             action += self.random_process.noise()
             action = np.clip(action, -1., 1.)
 
@@ -133,13 +132,6 @@ class DDPG(object):
 
     def reset(self):
         self.random_process.reset()
-    
-    def set_seed(self, seed):
-        if seed > 0:
-            torch.manual_seed(seed)
-            np.random.seed(seed)
-            if util.USE_CUDA:
-                torch.cuda.manual_seed(seed)
     
     def nets_to_cuda(self):
         if util.USE_CUDA: 
@@ -158,7 +150,7 @@ class DDPG(object):
         self.actor.train()
         self.actor_target.train()
         self.critic.train()
-        self.critic_target.train()#
+        self.critic_target.train()  
 
     def save_model(self,output):
         torch.save(self.actor.state_dict(), '{}/actor.pkl'.format(output))

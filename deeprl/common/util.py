@@ -15,6 +15,14 @@ def prCyan(prt): print("\033[96m {}\033[00m" .format(prt))
 def prLightGray(prt): print("\033[97m {}\033[00m" .format(prt))
 def prBlack(prt): print("\033[98m {}\033[00m" .format(prt))
 
+def seeding(seed, env=None):
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if env is not None:
+        env.seed(seed)
+    if USE_CUDA:
+        torch.cuda.manual_seed(seed)
+
 def to_numpy(var):
     return var.cpu().data.numpy() if USE_CUDA else var.data.numpy()
 
