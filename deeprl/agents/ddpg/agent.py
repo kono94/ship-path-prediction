@@ -11,7 +11,7 @@ import networks
 import deeprl.common.noise as noise
 import deeprl.common.util as util
 from deeprl.common.replay_buffer import ReplayBuffer
-
+import time
 logging.config.fileConfig('logger.conf')
 logger = logging.getLogger('ddpg')
 
@@ -51,7 +51,7 @@ class DDPG(object):
             p.requires_grad = False
             
         self.nets_to_cuda()
-
+        self.i = 0
         # Copy weights
         util.hard_update(self.actor, self.actor_target)
         util.hard_update(self.critic, self.critic_target)
@@ -120,7 +120,8 @@ class DDPG(object):
     def select_action(self, s_t, pure=False):
         action = self.actor(torch.as_tensor(s_t, dtype=torch.float32)).detach().numpy()
         if not pure:
-            action += self.random_process.noise()
+            action += max((20000 - self.i)/ 20000, 0) * self.random_process.noise()
+            self.i -= 1
             action = np.clip(action, -1., 1.)
 
         return action
@@ -153,11 +154,11 @@ class DDPG(object):
         self.critic_target.train()  
 
     def save_model(self,output):
-        torch.save(self.actor.state_dict(), '{}/actor.pkl'.format(output))
-        torch.save(self.critic.state_dict(),'{}/critic.pkl'.format(output))
+        torch.save(self.actor.state_dict(), '{}/actor.pth'.format(output))
+        torch.save(self.critic.state_dict(),'{}/critic.pth'.format(output))
         
         
     def load_weights(self, output):
         if output is None: return
-        self.actor.load_state_dict(torch.load('{}/actor.pkl'.format(output)))
-        self.critic.load_state_dict(torch.load('{}/critic.pkl'.format(output)))
+        self.actor.load_state_dict(torch.load('{}/actor.pth'.format(output)))
+        self.critic.load_state_dict(torch.load('{}/critic.pth'.format(output)))

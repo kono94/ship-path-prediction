@@ -32,11 +32,11 @@ def train(num_iterations, agent, env,  evaluate, visualize, output, max_episode_
             current_state = util.preprocess_state(deepcopy(env.reset()))
             agent.reset()
 
-        if step <= args.warmup:
+        in_warmup = step <= args.warmup
+        if in_warmup:
             action = agent.random_action()
         else:
             action = agent.select_action(current_state)
-            #print(action)
             if render:
                 env.render()
         
@@ -60,10 +60,12 @@ def train(num_iterations, agent, env,  evaluate, visualize, output, max_episode_
             util.prGreen(f'#{episode}: episode_reward:{episode_reward} steps:{step}')
             episode_reward_history.append(episode_reward)
               # [optional] evaluate
-            if evaluate is not None and 1==2:
-                policy = lambda x: agent.select_action(x, decay_epsilon=False)
-                validate_reward = evaluate(env, policy, agent, episode_reward_history, debug=True, visualize=True)
-                if debug: util.prYellow('[Evaluate] Step_{:07d}: mean_reward:{}'.format(step, validate_reward))
+            if evaluate is not None and not in_warmup:
+                agent.eval()
+                policy = lambda x: agent.select_action(x, pure=True)
+                validate_reward = evaluate(env, policy, visualize=render)
+                util.prYellow('[Evaluate] Step_{:07d}: mean_reward:{}'.format(step, validate_reward))
+                agent.train()
 
             #if visualize is not None and step > args.warmup:
              #   visualize(env, agent, episode_reward_history)
@@ -80,12 +82,11 @@ def test(num_episodes, agent, env, evaluate, model_path, visualize=True):
 
     agent.load_weights(model_path)
     print(sum(agent.actor.fc3.weight[0]))
-    agent.eval()
     policy = lambda x: agent.select_action(x, pure=True)
     episode_reward_history = []
     agent.eval()
     for i in range(num_episodes):
-        validate_reward = evaluate(env, policy, agent, episode_reward_history, visualize=visualize, save=True)
+        validate_reward = evaluate(env, policy, visualize=visualize, save=True)
         util.prYellow(f'[Evaluate] #{i}: mean_reward:{validate_reward}')
 
 
@@ -111,7 +112,6 @@ if __name__ == "__main__":
     parser.add_argument('--mu', default=0.0, type=float, help='noise mu') 
     parser.add_argument('--validate_episodes', default=3, type=int, help='how many episode to perform during validate experiment')
     parser.add_argument('--max_episode_length', default=500000, type=int, help='')
-    parser.add_argument('--validate_steps', default=10000, type=int, help='how many steps to perform a validate experiment')
     parser.add_argument('--output', default='runs', type=str, help='')
     parser.add_argument('--debug', dest='debug', action='store_true')
     parser.add_argument('--render', dest='render', action='store_true')
