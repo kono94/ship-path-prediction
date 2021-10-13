@@ -55,6 +55,7 @@ class DDPG(object):
         # Copy weights
         util.hard_update(self.actor, self.actor_target)
         util.hard_update(self.critic, self.critic_target)
+        self.noises = []
     
             
     
@@ -111,8 +112,8 @@ class DDPG(object):
     def update_targets_by_soft_copy(self):
         # target update (copy weights with tau degree); FROM ACTOR to ACTOR_TARGET
         with torch.no_grad():
-            util.soft_update(self.actor, self.actor_target, self.tau)
-            util.soft_update(self.critic, self.critic_target, self.tau)
+            util.soft_update(target=self.actor, source=self.actor_target, tau=self.tau)
+            util.soft_update(target=self.critic, source=self.critic_target, tau=self.tau)
     
     def random_action(self):
         return np.random.uniform(-1.,1.,self.nr_of_actions)
@@ -120,8 +121,11 @@ class DDPG(object):
     def select_action(self, s_t, pure=False):
         action = self.actor(torch.as_tensor(s_t, dtype=torch.float32)).detach().numpy()
         if not pure:
-            action += max((20000 - self.i)/ 20000, 0) * self.random_process.noise()
-            self.i -= 1
+            noise =  self.random_process.noise()
+            #max((30000 - self.i)/ 30000, 0) *
+            action += noise
+            self.noises.append(noise)
+            self.i += 1
             action = np.clip(action, -1., 1.)
 
         return action

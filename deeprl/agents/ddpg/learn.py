@@ -10,6 +10,7 @@ import random
 import time 
 import logging
 import networks
+import matplotlib.pyplot as plt
 import deeprl.common.util as  util
 from deeprl.common.normalize_actions import NormalizedActions
 from deeprl.agents.ddpg.agent import DDPG
@@ -39,7 +40,7 @@ def train(num_iterations, agent, env,  evaluate, visualize, output, max_episode_
             action = agent.select_action(current_state)
             if render:
                 env.render()
-        
+
         # env response with next_observation, reward, terminate_info
         next_state, reward, done, info = env.step(action)
         next_state = util.preprocess_state(deepcopy(next_state))
@@ -62,16 +63,22 @@ def train(num_iterations, agent, env,  evaluate, visualize, output, max_episode_
               # [optional] evaluate
             if evaluate is not None and not in_warmup:
                 agent.eval()
-                policy = lambda x: agent.select_action(x, pure=True)
-                validate_reward = evaluate(env, policy, visualize=render)
+                policy = lambda x: agent.select_action(util.preprocess_state(x), pure=True)
+                validate_reward = evaluate(env, agent, visualize=False)
                 util.prYellow('[Evaluate] Step_{:07d}: mean_reward:{}'.format(step, validate_reward))
+                if validate_reward > 94:
+                     agent.save_model(output)
+                     sys.exit()
                 agent.train()
 
+            #if episode_steps >= 20000:
+             #   plt.plot(range(0, len(agent.noises)), agent.noises)
+              #  plt.show()
             #if visualize is not None and step > args.warmup:
              #   visualize(env, agent, episode_reward_history)
 
             agent.save_model(output)
-            print(sum(agent.actor.fc3.weight[0]))
+            # print(sum(agent.actor.fc3.weight[0]))
             # reset
             current_state = None
             episode_steps = 0
@@ -86,7 +93,7 @@ def test(num_episodes, agent, env, evaluate, model_path, visualize=True):
     episode_reward_history = []
     agent.eval()
     for i in range(num_episodes):
-        validate_reward = evaluate(env, policy, visualize=visualize, save=True)
+        validate_reward = evaluate(env, agent, visualize=visualize, save=True)
         util.prYellow(f'[Evaluate] #{i}: mean_reward:{validate_reward}')
 
 
@@ -99,15 +106,15 @@ if __name__ == "__main__":
     parser.add_argument('--env', default=1, type=int, help='Environment; 1=cartpole, 2=line following')
     parser.add_argument('--hidden1', default=100, type=int, help='hidden num of first fully connect layer')
     parser.add_argument('--hidden2', default=50, type=int, help='hidden num of second fully connect layer')
-    parser.add_argument('--actor_lr_rate', default=0.05, type=float, help='actor net learning rate')
-    parser.add_argument('--critic_lr_rate', default=0.005, type=float, help='critic net learning rate')
+    parser.add_argument('--actor_lr_rate', default=0.005, type=float, help='actor net learning rate')
+    parser.add_argument('--critic_lr_rate', default=0.001, type=float, help='critic net learning rate')
     parser.add_argument('--warmup', default=1000, type=int, help='time without training but only filling the replay memory')
     parser.add_argument('--gamma', default=0.99, type=float, help='')
     parser.add_argument('--batch_size', default=64, type=int, help='batch size')
     parser.add_argument('--replay_max_size', default=50000, type=int, help='replay buffer size')
     parser.add_argument('--window_length', default=1, type=int, help='')
     parser.add_argument('--tau', default=0.1, type=float, help='moving average for target network; TAU')
-    parser.add_argument('--theta', default=0.15, type=float, help='noise theta')
+    parser.add_argument('--theta', default=0.10, type=float, help='noise theta')
     parser.add_argument('--sigma', default=0.2, type=float, help='noise sigma') 
     parser.add_argument('--mu', default=0.0, type=float, help='noise mu') 
     parser.add_argument('--validate_episodes', default=3, type=int, help='how many episode to perform during validate experiment')
@@ -146,7 +153,7 @@ if __name__ == "__main__":
 
     elif args.mode == 'test':
         test(args.validate_episodes, agent, env, evaluate, args.resume,
-            visualize=False)
+            visualize=True)
 
     else:
         raise RuntimeError('undefined mode {}'.format(args.mode))

@@ -14,7 +14,7 @@ class Evaluator(object):
         self.save_path = save_path
         self.results = np.array([]).reshape(num_episodes,0)
 
-    def __call__(self, env, policy, visualize=False, save=True):
+    def __call__(self, env, agent, visualize=False, save=True):
         observation = None
         result = []
 
@@ -30,11 +30,11 @@ class Evaluator(object):
             done = False
             while not done:
                 # basic operation, action ,reward, blablabla ...
-                action = policy(observation)
-
-                observation, reward, done, info = env.step(action)
-                if self.max_episode_length and episode_steps >= self.max_episode_length -1:
-                    done = True
+                action = agent.select_action(util.preprocess_state(observation), pure=True)
+                #print(f'before: {observation} and after: {util.preprocess_state(observation)} action: {action}')
+                next_state, reward, done, info = env.step(action)
+                #if self.max_episode_length and episode_steps >= self.max_episode_length -1:
+                 #   done = True
                 
                 if visualize:
                     env.render(mode='human')
@@ -42,6 +42,7 @@ class Evaluator(object):
                 # update
                 episode_reward += reward
                 episode_steps += 1
+                observation = deepcopy(next_state)
 
             util.prYellow('[Evaluate] #Episode{}: episode_reward:{}'.format(episode,episode_reward))
             result.append(episode_reward)

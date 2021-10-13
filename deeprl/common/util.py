@@ -31,13 +31,13 @@ def to_tensor(ndarray, volatile=False, requires_grad=False, dtype=FLOAT):
         torch.from_numpy(ndarray), volatile=volatile, requires_grad=requires_grad
     ).type(dtype)
 
-def soft_update(target, source, tau):
-    for target_param, param in zip(target.parameters(), source.parameters()):
-        target_param.data.mul_(1.0 - tau)
-        target_param.data.add_(param.data * tau)
+def soft_update(source, target, tau):
+    for param, target_param in zip(source.parameters(), target.parameters()):
+        target_param.data.copy_(tau * param.data + (1 - tau) * target_param.data)
+
 
 def hard_update(source, target):
-    for target_param, param in zip(target.parameters(), source.parameters()):
+    for param, target_param in zip(source.parameters(), target.parameters()):
             target_param.data.copy_(param.data)
 
 
