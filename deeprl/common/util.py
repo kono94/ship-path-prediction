@@ -41,9 +41,9 @@ def hard_update(source, target):
             target_param.data.copy_(param.data)
 
 
-def preprocess_state(state):
+def preprocess_state(state, env):
     # mapping the state values to [-1,1]
     s = np.array(state)
-    s[0] = ((state[0] + 1.2) / 1.8) * 2 - 1
-    s[1] = ((state[1] + 0.07) / 0.14) * 2 - 1
+    for i in range(0, len(s)):
+        s[i] = ((state[i] + env.observation_space.low[i]) / env.observation_space.high[i]) * 2 - 1
     return s

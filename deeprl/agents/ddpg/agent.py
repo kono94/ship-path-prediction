@@ -51,7 +51,8 @@ class DDPG(object):
             p.requires_grad = False
             
         self.nets_to_cuda()
-        self.i = 0
+        self.epsilon_step = 0
+        self.epsilon_max_decay = args.epsilon_max_decay
         # Copy weights
         util.hard_update(self.actor, self.actor_target)
         util.hard_update(self.critic, self.critic_target)
@@ -62,9 +63,10 @@ class DDPG(object):
     def update_policy(self):
         states, actions, rewards, next_states, dones = self.sample_train_batches()
         
+        local_Q = self.critic([states, actions])
         target_Q = self.calculate_target_Q(next_states, rewards, dones)
+        self.update_critic(local_Q, target_Q)
 
-        self.update_critic(states, actions, target_Q)
         self.update_actor(states)
 
         self.update_targets_by_soft_copy()
@@ -92,40 +94,38 @@ class DDPG(object):
         # r + gamma * Q, if not terminal
         return reward_batch + self.gamma * next_q_values * (1 - terminal_batch)
 
-    def update_critic(self, states, actions, target_Q):
+    def update_critic(self, local_Q, target_Q):
         # critic update
-        self.critic.zero_grad()
-        Q = self.critic([states, actions])
-        value_loss = self.criterion(Q, target_Q)
+        value_loss = self.criterion(local_Q, target_Q)
+        self.critic_optimizer.zero_grad()
         value_loss.backward()
         self.critic_optimizer.step() 
 
     def update_actor(self, states):
          # [optional] freeze Q-network parameters
         # actor update
-        self.actor.zero_grad()
-        policy_loss = -self.critic([states, self.actor(states)])
-        policy_loss = policy_loss.mean()
+        policy_loss = self.critic([states, self.actor(states)])
+        policy_loss = -policy_loss.mean()
+        self.actor_optimizer.zero_grad()
         policy_loss.backward()
         self.actor_optimizer.step()
 
     def update_targets_by_soft_copy(self):
         # target update (copy weights with tau degree); FROM ACTOR to ACTOR_TARGET
         with torch.no_grad():
-            util.soft_update(target=self.actor, source=self.actor_target, tau=self.tau)
-            util.soft_update(target=self.critic, source=self.critic_target, tau=self.tau)
+            util.soft_update(source=self.actor, target=self.actor_target, tau=self.tau)
+            util.soft_update(source=self.critic, target=self.critic_target, tau=self.tau)
     
     def random_action(self):
         return np.random.uniform(-1.,1.,self.nr_of_actions)
     
     def select_action(self, s_t, pure=False):
-        action = self.actor(torch.as_tensor(s_t, dtype=torch.float32)).detach().numpy()
+        action = self.actor(torch.as_tensor(s_t, dtype=torch.float32).to(self.device)).cpu().detach().numpy()
         if not pure:
-            noise =  self.random_process.noise()
-            #max((30000 - self.i)/ 30000, 0) *
+            noise = max((self.epsilon_max_decay - self.epsilon_step)/ self.epsilon_max_decay, 0) * self.random_process.noise()
             action += noise
             self.noises.append(noise)
-            self.i += 1
+            self.epsilon_step += 1
             action = np.clip(action, -1., 1.)
 
         return action
@@ -139,7 +139,8 @@ class DDPG(object):
         self.random_process.reset()
     
     def nets_to_cuda(self):
-        if util.USE_CUDA: 
+        if util.USE_CUDA:
+            print("Using Cuda!")
             self.actor.cuda()
             self.actor_target.cuda()
             self.critic.cuda()

@@ -5,8 +5,8 @@ class NormalizedActions(gym.ActionWrapper):
     """ Wrap action """
 
     def action(self, action):
-        act_k = (self.action_space.high - self.action_space.low)/ 2.
-        act_b = (self.action_space.high + self.action_space.low)/ 2.
+        act_k = (self.action_space.high - self.action_space.low)/ 2. 
+        act_b = (self.action_space.high + self.action_space.low)/ 2.  
         return act_k * action + act_b
 
     def reverse_action(self, action):
