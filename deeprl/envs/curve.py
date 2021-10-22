@@ -19,7 +19,7 @@ class CurveEnv(gym.Env):
         state: [width, height] => [0-1, 0-1]        
     """
 
-    def __init__(self, animation_delay=2):
+    def __init__(self, animation_delay=0):
         super(CurveEnv, self).__init__()
         self.width = 700
         self.height = 500
@@ -56,8 +56,8 @@ class CurveEnv(gym.Env):
 
     def _denormalize_state(self, state):
         tmp = np.ones_like(state)
-        spaces = {'low': [0, self.width],
-                  'high': [0, self.height]}
+        spaces = {'low': [0, 0],
+                  'high': [self.width, self.height]}
 
         for i in range(0, len(state)):
             act_k = (spaces['high'][i] - spaces['low'][i])/ 2. 
@@ -72,16 +72,16 @@ class CurveEnv(gym.Env):
         '''
         new_x = 1/self.width * (state[0] - self.width) + 1
         new_y = 1/self.height * (state[1] - self.height) + 1
+
         return (new_x, new_y)
 
     def step(self, action):
         action = self._denormalize_action(action)
-        #print(f'action: {action}')
-        deg = (action[0] + 1) * 180
+
         self.step_count += 1
         last_agent_pos = self.agent_traj[-1]
         last_pos = self.true_traj[-1]
-        alpha = deg * DEG2RAD
+        alpha = action * DEG2RAD
         next_agent_x = last_agent_pos[0] + int((self.speed * math.cos(alpha)))
         next_agent_y = last_agent_pos[1] + int((self.speed * math.sin(alpha)))
         next_agent_point = (next_agent_x, next_agent_y)
@@ -95,7 +95,8 @@ class CurveEnv(gym.Env):
 
         last_agent_pos
         done = next_agent_y > self.height or next_agent_y < 0 or next_agent_x > self.width or next_agent_x < 0
-        reward = norm.pdf(math.sqrt((next_agent_x - next_x)**2 + (next_agent_y - next_y)**2),0,20) * 100
+      #  print(f'distance: {math.sqrt((next_agent_x - next_x)**2 + (next_agent_y - next_y)**2)}')
+        reward = norm.pdf(math.sqrt((next_agent_x - next_x)**2 + (next_agent_y - next_y)**2),0,30) * 75.199 # scale amplitude to 1
         if reward < 0.001:
             reward = 0
         return self._normalize_state(next_point), reward, done, {}
@@ -103,7 +104,7 @@ class CurveEnv(gym.Env):
     def reset(self):
         self.true_traj = [(10, 10), (10, 10)]
         self.agent_traj = [(10, 10), (10, 10)]
-        self.step_count = 0
+        #self.step_count = 0
         self.rng = np.random.default_rng(12345)
         return self._normalize_state((10, 10))
 

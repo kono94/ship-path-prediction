@@ -48,6 +48,7 @@ def train(num_iterations, agent, env,  evaluate, visualize, output, max_episode_
         # env response with next_observation, reward, terminate_info
         next_state, reward, done, info = env.step(action)
         next_state = util.preprocess_state(deepcopy(next_state), env)
+      
         #print(next_state)
         # agent stores transition and update policy
         agent.remember(current_state, action, reward, next_state, done)
@@ -65,16 +66,25 @@ def train(num_iterations, agent, env,  evaluate, visualize, output, max_episode_
             util.prGreen(f'#{episode}: episode_reward:{episode_reward} steps:{step}')
             episode_reward_history.append(episode_reward)
               # [optional] evaluate
-            if evaluate is not None and not in_warmup:
+            if evaluate is not None and not in_warmup and step > 40000:
                 agent.eval()
                 policy = lambda x: agent.select_action(util.preprocess_state(x, env), pure=True)
                 validate_reward = evaluate(env, agent, visualize=False)
                 validate_reward_history.append(validate_reward)
                 util.prYellow('[Evaluate] Step_{:07d}: mean_reward:{}'.format(step, validate_reward))
-                if validate_reward > 98:
-                     agent.save_model(output)
-                     sys.exit()
                 agent.train()
+                if validate_reward > 18 and step > 40000:
+                    agent.save_model(output)
+                    y = episode_reward_history
+                    fn = '{}/episode_reward'.format(output)           
+                    x = range(0,len(episode_reward_history))
+                    fig, ax = plt.subplots(1, 1, figsize=(7, 5))
+                    plt.xlabel(f'Episode chunks (bundled by {3})')
+                    plt.ylabel('Average Reward')
+                    ax.plot(x, y)
+                    plt.savefig(fn+'.png')
+                    savemat(fn+'.mat', {'reward':episode_reward_history})
+                    sys.exit()
             """ 
             y = episode_reward_history
             fn = '{}/episode_reward'.format(output)           
@@ -109,6 +119,7 @@ def train(num_iterations, agent, env,  evaluate, visualize, output, max_episode_
             episode_steps = 0
             episode_reward = 0.
             episode += 1
+    agent.save_model(output)
     y = episode_reward_history
     fn = '{}/episode_reward'.format(output)           
     x = range(0,len(episode_reward_history))
@@ -172,7 +183,7 @@ if __name__ == "__main__":
     elif args.env == 3:
         env = GolfHiddenHoles()
     elif args.env == 4:
-        env = CurveEnv()
+        env = CurveEnv(0.3)
 
     if args.seed > 0:
         util.seeding(args.seed, env)

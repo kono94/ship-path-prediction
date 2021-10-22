@@ -1,10 +1,10 @@
 import gym
 import numpy as np
-
+from deeprl.envs.curve import CurveEnv
 from stable_baselines3 import DDPG
 from stable_baselines3.common.noise import NormalActionNoise, OrnsteinUhlenbeckActionNoise
 
-env = gym.make("MountainCarContinuous-v0")
+env = CurveEnv()
 
 # The noise objects for DDPG
 n_actions = env.action_space.shape[-1]

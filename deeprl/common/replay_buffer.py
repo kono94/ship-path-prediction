@@ -41,4 +41,5 @@ class ReplayBuffer(object):
         next_states = self.next_state_memory[batch_idx]
         dones       = self.terminal_memory[batch_idx]
         
+        #print(f'state: {states[0]} action: {actions[0]} reward: {rewards[0]} next_state: {next_states[0]}' )
         return states, actions, rewards, next_states, dones
