@@ -165,5 +165,5 @@ class DDPG(object):
         
     def load_weights(self, output):
         if output is None: return
-        self.actor.load_state_dict(torch.load('{}/actor.pth'.format(output)))
-        self.critic.load_state_dict(torch.load('{}/critic.pth'.format(output)))
+        self.actor.load_state_dict(torch.load('{}/actor.pth'.format(output), map_location=torch.device('cpu')))
+        self.critic.load_state_dict(torch.load('{}/critic.pth'.format(output), map_location=torch.device('cpu')))

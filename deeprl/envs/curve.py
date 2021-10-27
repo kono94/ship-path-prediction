@@ -99,7 +99,7 @@ class CurveEnv(gym.Env):
         reward = norm.pdf(math.sqrt((next_agent_x - next_x)**2 + (next_agent_y - next_y)**2),0,30) * 75.199 # scale amplitude to 1
         if reward < 0.001:
             reward = 0
-        return self._normalize_state(next_point), reward, done, {}
+        return self._normalize_state(next_agent_point), reward, done, {}
 
     def reset(self):
         self.true_traj = [(10, 10), (10, 10)]
