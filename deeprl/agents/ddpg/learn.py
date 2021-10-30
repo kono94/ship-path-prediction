@@ -66,14 +66,14 @@ def train(num_iterations, agent, env,  evaluate, visualize, output, max_episode_
             util.prGreen(f'#{episode}: episode_reward:{episode_reward} steps:{step}')
             episode_reward_history.append(episode_reward)
               # [optional] evaluate
-            if evaluate is not None and not in_warmup and step > 40000:
+            if evaluate is not None and not in_warmup and step > 40000 and episode_reward > 30:
                 agent.eval()
                 policy = lambda x: agent.select_action(util.preprocess_state(x, env), pure=True)
                 validate_reward = evaluate(env, agent, visualize=False)
                 validate_reward_history.append(validate_reward)
                 util.prYellow('[Evaluate] Step_{:07d}: mean_reward:{}'.format(step, validate_reward))
                 agent.train()
-                if validate_reward > 18 and step > 40000:
+                if validate_reward > 35 and step > 40000:
                     agent.save_model(output)
                     y = episode_reward_history
                     fn = '{}/episode_reward'.format(output)           
@@ -183,7 +183,7 @@ if __name__ == "__main__":
     elif args.env == 3:
         env = GolfHiddenHoles()
     elif args.env == 4:
-        env = CurveEnv(0.3)
+        env = CurveEnv(0.05)
 
     if args.seed > 0:
         util.seeding(args.seed, env)
