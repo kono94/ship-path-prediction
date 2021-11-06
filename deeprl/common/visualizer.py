@@ -8,9 +8,6 @@ import time
 
 class Visualizer(object):
 
-    def __init__(self, save_path=''):
-        self.save_path = save_path
-
     def __call__(self, env, agent, episode_reward_history):
         agent.eval()
         plt.xlabel('Episode')

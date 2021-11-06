@@ -19,11 +19,12 @@ from deeprl.common.visualizer import Visualizer
 from scipy.io import savemat
 from deeprl.envs.golf import GolfHiddenHoles
 from deeprl.envs.curve import CurveEnv
+import json
 
 logging.config.fileConfig('logger.conf')
 logger = logging.getLogger('learn.py')
 
-def train(num_iterations, agent, env,  evaluate, visualize, output, max_episode_length=None, debug=True, render=False):
+def train(num_iterations, agent, env,  evaluate, reward_barrier, step_barrier, visualize, output, max_episode_length=None, debug=True, render=False):
 
     step = episode = episode_steps = 0
     episode_reward = 0.
@@ -74,46 +75,8 @@ def train(num_iterations, agent, env,  evaluate, visualize, output, max_episode_
                 util.prYellow('[Evaluate] Step_{:07d}: mean_reward:{}'.format(step, validate_reward))
                 agent.train()
                 if validate_reward > 35 and step > 40000:
-                    agent.save_model(output)
-                    y = episode_reward_history
-                    fn = '{}/episode_reward'.format(output)           
-                    x = range(0,len(episode_reward_history))
-                    fig, ax = plt.subplots(1, 1, figsize=(7, 5))
-                    plt.xlabel(f'Episode chunks (bundled by {3})')
-                    plt.ylabel('Average Reward')
-                    ax.plot(x, y)
-                    plt.savefig(fn+'.png')
-                    savemat(fn+'.mat', {'reward':episode_reward_history})
-                    sys.exit()
-            """ 
-            y = episode_reward_history
-            fn = '{}/episode_reward'.format(output)           
-            x = range(0,len(episode_reward_history))
-            fig, ax = plt.subplots(1, 1, figsize=(7, 5))
-            plt.xlabel(f'Episode chunks (bundled by {3})')
-            plt.ylabel('Average Reward')
-            ax.plot(x, y)
-            plt.savefig(fn+'.png')
-            savemat(fn+'.mat', {'reward':episode_reward_history})
-
-            y = validate_reward_history
-            fn = '{}/validate_reward'.format(output)           
-            x = range(0,len(validate_reward_history))
-            fig, ax = plt.subplots(1, 1, figsize=(7, 5))
-            plt.xlabel(f'Episode chunks (bundled by {3})')
-            plt.ylabel('Average Reward')
-            ax.plot(x, y)
-            plt.savefig(fn+'.png')
-            savemat(fn+'.mat', {'reward':validate_reward_history}) """
-            
-            #if episode_steps >= 20000:
-             #   plt.plot(range(0, len(agent.noises)), agent.noises)
-              #  plt.show()
-           # if visualize is not None and step > args.warmup:
-             #   visualize(env, agent, episode_reward_history)
-
-            # print(sum(agent.actor.fc3.weight[0]))
-
+                    'Task marked as solved, early stopping'
+                    break
             # reset
             current_state = None
             episode_steps = 0
@@ -121,14 +84,21 @@ def train(num_iterations, agent, env,  evaluate, visualize, output, max_episode_
             episode += 1
     agent.save_model(output)
     y = episode_reward_history
-    fn = '{}/episode_reward'.format(output)           
     x = range(0,len(episode_reward_history))
+    fig, ax = plt.subplots(1, 1, figsize=(7, 5))
+    plt.xlabel(f'Episode')
+    plt.ylabel('Average Reward')
+    ax.plot(x, y)
+    plt.savefig(f'{output}_episode_reward_{0 if len(episode_reward_history) == 0 else episode_reward_history[-1]}.png')
+    
+    
+    y = validate_reward_history
+    x = range(0,len(validate_reward_history))
     fig, ax = plt.subplots(1, 1, figsize=(7, 5))
     plt.xlabel(f'Episode chunks (bundled by {3})')
     plt.ylabel('Average Reward')
     ax.plot(x, y)
-    plt.savefig(fn+'.png')
-    savemat(fn+'.mat', {'reward':episode_reward_history})
+    plt.savefig(f'{output}_validate_reward_{0 if len(validate_reward_history) == 0 else validate_reward_history[-1]}.png')
 
 def test(num_episodes, agent, env, evaluate, model_path, visualize=True):
 
@@ -164,18 +134,29 @@ if __name__ == "__main__":
     parser.add_argument('--mu', default=0.0, type=float, help='noise mu') 
     parser.add_argument('--validate_episodes', default=3, type=int, help='how many episode to perform during validate experiment')
     parser.add_argument('--max_episode_length', default=500000, type=int, help='')
-    parser.add_argument('--output', default='runs', type=str, help='')
     parser.add_argument('--debug', dest='debug', action='store_true')
     parser.add_argument('--render', dest='render', action='store_true')
     parser.add_argument('--init_w', default=0.003, type=float, help='') 
     parser.add_argument('--train_iter', default=50000, type=int, help='train iters each timestep')
     parser.add_argument('--epsilon_max_decay', default=40000, type=int, help='linear decay of exploration policy')
     parser.add_argument('--seed', default=42, type=int, help='')
-    parser.add_argument('--resume', default='default', type=str, help='Resuming model path for testing')
-
+    parser.add_argument('--reward_barrier', default=30, type=int, help='')
+    parser.add_argument('--step_barrier', default=40000, type=int, help='')
+    parser.add_argument('--file_prefix', default='', type=str, help='file prefix')
+    
+    
     args = parser.parse_args()
-    output = os.path.join(sys.path[1], 'runs')
-
+    file_prefix = args.file_prefix
+    if file_prefix == '':
+        file_prefix = os.path.join(sys.path[1], 'runs', f'{args.env}_{args.hidden1}_{args.hidden2}_{args.reward_barrier}_{args.seed}')
+        with open(f'{file_prefix}_args', 'w') as f:
+            json.dump(args.__dict__, f, indent=2)
+    else:
+        with open(f'{file_prefix}_args', 'r') as f:
+            args.__dict__ = json.load(f)
+            args.mode = 'test'
+            args.render = True
+           
     if args.env == 1:
         env = gym.make('MountainCarContinuous-v0')
     elif args.env == 2:
@@ -197,15 +178,15 @@ if __name__ == "__main__":
 
     evaluate = None
     if args.validate_episodes > 2:
-        evaluate = Evaluator(args.validate_episodes, args.output, max_episode_length=args.max_episode_length)
+        evaluate = Evaluator(args.validate_episodes, file_prefix, max_episode_length=args.max_episode_length)
 
-    visualize = Visualizer(args.output)
+    visualize = Visualizer()
 
     if args.mode == 'train':
-        train(args.train_iter, agent, env, evaluate, visualize, args.output, max_episode_length=args.max_episode_length, debug=True, render=args.render)
+        train(args.train_iter, agent, env, evaluate, args.reward_barrier, args.step_barrier, visualize, file_prefix, max_episode_length=args.max_episode_length, debug=True, render=args.render)
 
     elif args.mode == 'test':
-        test(args.validate_episodes, agent, env, evaluate, args.resume,
+        test(args.validate_episodes, agent, env, evaluate, file_prefix,
             visualize=args.render)
 
     else:

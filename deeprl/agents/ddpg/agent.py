@@ -159,11 +159,11 @@ class DDPG(object):
         self.critic_target.train()  
 
     def save_model(self,output):
-        torch.save(self.actor.state_dict(), '{}/actor.pth'.format(output))
-        torch.save(self.critic.state_dict(),'{}/critic.pth'.format(output))
+        torch.save(self.actor.state_dict(), '{}_actor.pth'.format(output))
+        torch.save(self.critic.state_dict(),'{}_critic.pth'.format(output))
         
         
     def load_weights(self, output):
         if output is None: return
-        self.actor.load_state_dict(torch.load('{}/actor.pth'.format(output), map_location=torch.device('cpu')))
-        self.critic.load_state_dict(torch.load('{}/critic.pth'.format(output), map_location=torch.device('cpu')))
+        self.actor.load_state_dict(torch.load('{}_actor.pth'.format(output), map_location=torch.device('cpu')))
+        self.critic.load_state_dict(torch.load('{}_critic.pth'.format(output), map_location=torch.device('cpu')))
