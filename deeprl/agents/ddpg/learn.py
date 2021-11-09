@@ -183,7 +183,7 @@ if __name__ == "__main__":
     elif args.env == 3:
         env = GolfHiddenHoles()
     elif args.env == 4:
-        env = CurveEnv(0.3)
+        env = CurveEnv(0.25)
 
     if args.seed > 0:
         util.seeding(args.seed, env)

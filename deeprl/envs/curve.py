@@ -103,7 +103,7 @@ class CurveEnv(gym.Env):
 
     def reset(self):
         self.true_traj = [(10, 10), (10, 10)]
-        self.agent_traj = [(10, 10), (10, 10)]
+        self.agent_traj = [(350, 50), (350, 50)]
         #self.step_count = 0
         self.rng = np.random.default_rng(12345)
         return self._normalize_state((10, 10))

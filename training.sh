@@ -9,3 +9,7 @@ python ./deeprl/agents/ddpg/learn.py --mode test --resume runs --env 4 \
 --tau 0.001 --train_iter 200000 \
 --actor_lr_rate 0.0005 --critic_lr_rate 0.0005 --epsilon_max_decay 200000 \
 --validate_episodes 3 --render
+
+# self.agent_traj = [(180, 20), (180, 20)]
+# self.agent_traj = [(10, 150), (10, 150)]
+# self.agent_traj = [(350, 50), (350, 50)]
