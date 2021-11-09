@@ -2,6 +2,7 @@ import gym
 from gym import spaces
 import numpy as np
 from tkinter import *
+import tkinter as tk
 import random
 import threading
 import math
@@ -51,6 +52,10 @@ class CurveEnv(gym.Env):
 
         self.rng = np.random.default_rng(self._rng_seed)
 
+        self.curr_alpha = 0
+        self.curr_speed = 0
+        self.curr_reward = 0
+
     def _denormalize_action(self, action):
         tmp = np.ones_like(action)
         spaces = {'low': [self.min_angle, self.min_speed],
@@ -96,6 +101,7 @@ class CurveEnv(gym.Env):
         last_pos = self.true_traj[-1]
         alpha = action[0] * DEG2RAD
         speed = action[1]
+
         next_agent_x = last_agent_pos[0] + int((speed * math.cos(alpha)))
         next_agent_y = last_agent_pos[1] + int((speed * math.sin(alpha)))
         next_agent_point = (next_agent_x, next_agent_y)
@@ -114,6 +120,10 @@ class CurveEnv(gym.Env):
         reward = norm.pdf(math.sqrt((next_agent_x - next_x)**2 + (next_agent_y - next_y)**2),0,30) * 75.199 # scale amplitude to 1
         if reward < 0.001:
             reward = 0
+
+        self.curr_alpha = alpha
+        self.curr_speed = speed
+        self.curr_reward = reward
         return self._normalize_state(next_agent_point + (speed,)), reward, done, {}
 
     def reset(self):
@@ -131,6 +141,11 @@ class CurveEnv(gym.Env):
             *self.true_traj[-1], r=5), fill="black")
         self.canvas.create_oval(self._generate_circle_coords(
             *self.agent_traj[-1], r=5), fill="red")
+        self.canvas.create_text(500, 20,fill="red",font="Times 10",
+                        text=f'[{self.agent_traj[-1][0]}, {self.agent_traj[-1][1]}] speed: {round(self.curr_speed)} heading: {round(self.curr_alpha, 3)}', anchor=tk.NW)
+        self.canvas.create_text(500, 40,fill="black",font="Times 10",
+                    text=f'reward: {round(self.curr_reward, 3)}', anchor=tk.NW)
+                    
         self.master.update()
         time.sleep(self.animation_delay)
 

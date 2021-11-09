@@ -67,14 +67,14 @@ def train(num_iterations, agent, env,  evaluate, reward_barrier, step_barrier, v
             util.prGreen(f'#{episode}: episode_reward:{episode_reward} steps:{step}')
             episode_reward_history.append(episode_reward)
               # [optional] evaluate
-            if evaluate is not None and not in_warmup and step > 40000 and episode_reward > 30:
+            if evaluate is not None and not in_warmup and step > step_barrier and episode_reward > reward_barrier:
                 agent.eval()
                 policy = lambda x: agent.select_action(util.preprocess_state(x, env), pure=True)
                 validate_reward = evaluate(env, agent, visualize=False)
                 validate_reward_history.append(validate_reward)
                 util.prYellow('[Evaluate] Step_{:07d}: mean_reward:{}'.format(step, validate_reward))
                 agent.train()
-                if validate_reward > 35 and step > 40000:
+                if validate_reward > reward_barrier:
                     'Task marked as solved, early stopping'
                     break
             # reset
@@ -83,19 +83,34 @@ def train(num_iterations, agent, env,  evaluate, reward_barrier, step_barrier, v
             episode_reward = 0.
             episode += 1
     agent.save_model(output)
-    y = episode_reward_history
-    x = range(0,len(episode_reward_history))
+    # reduce amount of data points by applying moving average (1k points in total)
+    
+
+    def reduce_datapoints(data, points_to_plot):
+        '''
+        split dataset into chunks and then calucate the mean of all chunks.
+        This is done to reduce the amount of datapoints to plot...
+        '''
+        if len(data) < points_to_plot:
+            return data
+        splits = np.array_split(episode_reward_history, points_to_plot)
+        return [np.mean(x) for x in splits]
+
+    pps_to_plot = 1000
+    y = reduce_datapoints(episode_reward_history, pps_to_plot)
+    x = range(0,len(y))
     fig, ax = plt.subplots(1, 1, figsize=(7, 5))
-    plt.xlabel(f'Episode')
+    
+    plt.xlabel(f'Episode (+1 times {"1" if (len(episode_reward_history) / pps_to_plot) < 1 else len(episode_reward_history) / pps_to_plot}')
     plt.ylabel('Average Reward')
     ax.plot(x, y)
     plt.savefig(f'{output}_episode_reward_{0 if len(episode_reward_history) == 0 else episode_reward_history[-1]}.png')
     
     
-    y = validate_reward_history
-    x = range(0,len(validate_reward_history))
+    y = reduce_datapoints(validate_reward_history, pps_to_plot)
+    x = range(0,len(y))
     fig, ax = plt.subplots(1, 1, figsize=(7, 5))
-    plt.xlabel(f'Episode chunks (bundled by {3})')
+    plt.xlabel(f'Episode bundle by 3 (+1 times {"1" if (len(validate_reward_history) / pps_to_plot) < 1 else len(validate_reward_history) / pps_to_plot}')
     plt.ylabel('Average Reward')
     ax.plot(x, y)
     plt.savefig(f'{output}_validate_reward_{0 if len(validate_reward_history) == 0 else validate_reward_history[-1]}.png')

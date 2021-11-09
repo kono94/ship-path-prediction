@@ -50,19 +50,5 @@ class Evaluator(object):
         result = np.array(result).reshape(-1,1)
         self.results = np.hstack([self.results, result])
 
-        if save:
-            self.save_results('{}/validate_reward'.format(self.save_path))
         return np.mean(result)
 
-    def save_results(self, fn):
-
-        y = np.mean(self.results, axis=0)
-        error=np.std(self.results, axis=0)
-                    
-        x = range(0,self.results.shape[1])
-        fig, ax = plt.subplots(1, 1, figsize=(7, 5))
-        plt.xlabel(f'Episode chunks (bundled by {self.num_episodes})')
-        plt.ylabel('Average Reward')
-        ax.errorbar(x, y, yerr=error, fmt='-o')
-        plt.savefig(fn+'.png')
-        savemat(fn+'.mat', {'reward':self.results})
