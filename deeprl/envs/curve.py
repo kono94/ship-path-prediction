@@ -32,12 +32,12 @@ class CurveEnv(gym.Env):
         self.max_angle = 360
 
         # Action space is heading which is 0 to 360 degrees and speed from 0 to 40
-        self.action_space = spaces.Box(low=np.array([-1, -1]), high=np.array([1, 1]), 
+        self.action_space = spaces.Box(low=-1, high=1, 
                                        shape=(2,), dtype=np.float32)
 
         # obervation state (x, y, speed)
-        self.observation_space = spaces.Box(low=np.array([0, 0, 0]), high=np.array([1, 1, 1]), 
-                                        shape=(3,), dtype=np.int)
+        self.observation_space = spaces.Box(low=0, high=1, 
+                                        shape=(3,), dtype=np.float32)
 
         self.master = Tk()
         self.master.eval('tk::PlaceWindow . center')
@@ -89,13 +89,12 @@ class CurveEnv(gym.Env):
         '''
         new_x = 1/self.width * (state[0] - self.width) + 1
         new_y = 1/self.height * (state[1] - self.height) + 1
-        new_speed = 1/self.min_speed * (state[2] - self.max_speed) + 1
-        
-        return (new_x, new_y, new_speed)
+        new_speed = 1/(self.max_speed - self.min_speed) * (state[2] - self.max_speed) + 1
+        return np.array([new_x, new_y, new_speed], dtype=np.float32)
 
     def step(self, action):
         action = self._denormalize_action(action)
-
+      
         self.step_count += 1
         last_agent_pos = self.agent_traj[-1]
         last_pos = self.true_traj[-1]
@@ -114,17 +113,21 @@ class CurveEnv(gym.Env):
         next_point = (next_x, next_y)
         self.true_traj.append(next_point)
 
-        last_agent_pos
-        done = next_agent_y > self.height or next_agent_y < 0 or next_agent_x > self.width or next_agent_x < 0
+        done = next_agent_y > self.height or next_agent_y < 0 or next_agent_x > self.width or next_agent_x < 0 or self.step_count > 1000
+        
+        # clip values to stay in observation space when leaving the world
+        next_agent_y = np.clip(next_agent_y, 0, self.height)
+        next_agent_x = np.clip(next_agent_x, 0, self.width)
+              
       #  print(f'distance: {math.sqrt((next_agent_x - next_x)**2 + (next_agent_y - next_y)**2)}')
         reward = norm.pdf(math.sqrt((next_agent_x - next_x)**2 + (next_agent_y - next_y)**2),0,30) * 75.199 # scale amplitude to 1
-        if reward < 0.001:
+        if done or reward < 0.001:
             reward = 0
 
         self.curr_alpha = alpha
         self.curr_speed = speed
         self.curr_reward = reward
-        return self._normalize_state(next_agent_point + (speed,)), reward, done, {}
+        return self._normalize_state((next_agent_x,) + (next_agent_y,) + (speed,)), reward, done, {}
 
     def reset(self):
         self.true_traj = [(10, 10), (10, 10)]
