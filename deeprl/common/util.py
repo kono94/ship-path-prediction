@@ -23,6 +23,12 @@ def seeding(seed, env=None):
     if USE_CUDA:
         torch.cuda.manual_seed(seed)
 
+def lmap(v: float, original_interval, desired_interval) -> float:
+    """Linear map of value v with range x to desired range y."""
+    x = original_interval
+    y = desired_interval
+    return y[0] + (v - x[0]) * (y[1] - y[0]) / (x[1] - x[0])
+
 def to_numpy(var):
     return var.cpu().data.numpy() if USE_CUDA else var.data.numpy()
 

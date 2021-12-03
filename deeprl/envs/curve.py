@@ -7,6 +7,7 @@ import random
 import threading
 import math
 import time
+import deeprl.common.util as util
 from scipy.stats import norm
 
 DEG2RAD = 0.0174533
@@ -36,7 +37,7 @@ class CurveEnv(gym.Env):
                                        shape=(2,), dtype=np.float32)
 
         # obervation state (x, y, speed)
-        self.observation_space = spaces.Box(low=0, high=1, 
+        self.observation_space = spaces.Box(low=-1, high=1, 
                                         shape=(3,), dtype=np.float32)
 
         self.master = Tk()
@@ -68,16 +69,11 @@ class CurveEnv(gym.Env):
         return tmp
     
     def _denormalize_state(self, state):
-        tmp = np.ones_like(state)
-        spaces = {'low': [0, 0, self.min_speed],
-                  'high': [self.width, self.height, self.max_speed]}
+        original_x = util.lmap(state[0], [-1, 1], [0, self.width])
+        original_y = util.lmap(state[1], [-1, 1], [0, self.height])
+        original_speed = util.lmap(state[2], [-1, 1], [self.min_speed, self.max_speed])
+        return np.array([original_x, original_y, original_speed], dtype=np.float32)
 
-        for i in range(0, len(state)):
-            act_k = (spaces['high'][i] - spaces['low'][i])/ 2. 
-            act_b = (spaces['high'][i] + spaces['low'][i])/ 2.  
-            tmp[i] = act_k * state[i] + act_b
-
-        return tmp
 
     def _normalize_state(self, state):
         '''
@@ -85,12 +81,12 @@ class CurveEnv(gym.Env):
                    1 => y coord
                    2 => speed
                    
-        Scale to 0 to 1
+        Scale to -1 to 1
         '''
-        new_x = 1/self.width * (state[0] - self.width) + 1
-        new_y = 1/self.height * (state[1] - self.height) + 1
-        new_speed = 1/(self.max_speed - self.min_speed) * (state[2] - self.max_speed) + 1
-        return np.array([new_x, new_y, new_speed], dtype=np.float32)
+        norm_x = util.lmap(state[0], [0, self.width], [-1, 1])
+        norm_y = util.lmap(state[1], [0, self.height], [-1, 1])
+        norm_speed = util.lmap(state[2], [self.min_speed, self.max_speed], [-1, 1])
+        return np.array([norm_x, norm_y, norm_speed], dtype=np.float32)
 
     def step(self, action):
         action = self._denormalize_action(action)
@@ -107,6 +103,7 @@ class CurveEnv(gym.Env):
         self.agent_traj.append(next_agent_point)
 
         pre_curve = self.rng.integers(low=20, high=60, size=1) * DEG2RAD
+        pre_curve = 45
         pre_speed = min(self.min_speed * (self.step_count / 5), self.max_speed)
         next_x = last_pos[0] + int((pre_speed * math.cos(pre_curve)))
         next_y = last_pos[1] + int((pre_speed * math.sin(pre_curve)))
