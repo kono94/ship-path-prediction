@@ -9,9 +9,7 @@ import math
 import time
 import deeprl.common.util as util
 from scipy.stats import norm
-
-DEG2RAD = 0.0174533
-
+from gym.envs.registration import register
 
 class CurveEnv(gym.Env):
     """Custom Environment that follows gym interface
@@ -29,8 +27,8 @@ class CurveEnv(gym.Env):
         self.height = 500
         self.min_speed = 5
         self.max_speed = 40
-        self.min_angle = 0
-        self.max_angle = 360
+        self.min_angle = -math.pi
+        self.max_angle = math.pi
 
         # Action space is heading which is 0 to 360 degrees and speed from 0 to 40
         self.action_space = spaces.Box(low=-1, high=1, 
@@ -40,13 +38,7 @@ class CurveEnv(gym.Env):
         self.observation_space = spaces.Box(low=-1, high=1, 
                                         shape=(3,), dtype=np.float32)
 
-        self.master = Tk()
-        self.master.eval('tk::PlaceWindow . center')
-        self.canvas = Canvas(self.master,
-                                width=self.width,
-                                height=self.height,
-                                bg='white')
-        self.canvas.pack()
+        
         self.true_traj = [(10, 10), (10, 10)]
         self.agent_traj = [(10, 10), (10, 10)]
         self.step_count = 0
@@ -56,17 +48,13 @@ class CurveEnv(gym.Env):
         self.curr_alpha = 0
         self.curr_speed = 0
         self.curr_reward = 0
+        
+        self.master = None
 
     def _denormalize_action(self, action):
-        tmp = np.ones_like(action)
-        spaces = {'low': [self.min_angle, self.min_speed],
-                  'high': [self.max_angle, self.max_speed]}
-        for i in range(0, len(action)):
-            act_k = (spaces['high'][i] - spaces['low'][i])/ 2. 
-            act_b = (spaces['high'][i] + spaces['low'][i])/ 2.  
-            tmp[i] = act_k * action[i] + act_b
-
-        return tmp
+       original_angle = util.lmap(action[0], [-1, 1], [self.min_angle, self.max_angle])
+       original_speed = util.lmap(action[1], [-1, 1], [self.min_speed, self.max_speed])
+       return np.array([original_angle, original_speed], dtype=np.float32)
     
     def _denormalize_state(self, state):
         original_x = util.lmap(state[0], [-1, 1], [0, self.width])
@@ -94,7 +82,7 @@ class CurveEnv(gym.Env):
         self.step_count += 1
         last_agent_pos = self.agent_traj[-1]
         last_pos = self.true_traj[-1]
-        alpha = action[0] * DEG2RAD
+        alpha = action[0]
         speed = action[1]
 
         next_agent_x = last_agent_pos[0] + int((speed * math.cos(alpha)))
@@ -102,7 +90,7 @@ class CurveEnv(gym.Env):
         next_agent_point = (next_agent_x, next_agent_y)
         self.agent_traj.append(next_agent_point)
 
-        pre_curve = self.rng.integers(low=20, high=60, size=1) * DEG2RAD
+        pre_curve = self.rng.integers(low=20, high=60, size=1) 
         pre_curve = 45
         pre_speed = min(self.min_speed * (self.step_count / 5), self.max_speed)
         next_x = last_pos[0] + int((pre_speed * math.cos(pre_curve)))
@@ -110,16 +98,20 @@ class CurveEnv(gym.Env):
         next_point = (next_x, next_y)
         self.true_traj.append(next_point)
 
-        done = next_agent_y > self.height or next_agent_y < 0 or next_agent_x > self.width or next_agent_x < 0 or self.step_count > 1000
-        
         # clip values to stay in observation space when leaving the world
         next_agent_y = np.clip(next_agent_y, 0, self.height)
         next_agent_x = np.clip(next_agent_x, 0, self.width)
-              
-      #  print(f'distance: {math.sqrt((next_agent_x - next_x)**2 + (next_agent_y - next_y)**2)}')
-        reward = norm.pdf(math.sqrt((next_agent_x - next_x)**2 + (next_agent_y - next_y)**2),0,30) * 75.199 # scale amplitude to 1
+        
+        dist_from_path = math.sqrt((next_agent_x - next_x)**2 + (next_agent_y - next_y)**2)
+        #print(f'distance: {math.sqrt((next_agent_x - next_x)**2 + (next_agent_y - next_y)**2)}')
+        reward = norm.pdf(dist_from_path,0,30) * 75.199 # scale amplitude to 1
+       
+        done = next_agent_y > self.height or next_agent_y < 0 or \
+               next_agent_x > self.width or next_agent_x < 0 or \
+               self.step_count > 1000 or dist_from_path > 10
         if done or reward < 0.001:
             reward = 0
+            
 
         self.curr_alpha = alpha
         self.curr_speed = speed
@@ -134,6 +126,14 @@ class CurveEnv(gym.Env):
         return self._normalize_state((10, 10, self.min_speed))
 
     def render(self, mode='human'):
+        if self.master == None:
+            self.master = Tk()
+            self.master.eval('tk::PlaceWindow . center')
+            self.canvas = Canvas(self.master,
+                                    width=self.width,
+                                    height=self.height,
+                                    bg='white')
+            self.canvas.pack()
         self.canvas.delete("all")
         self.canvas.create_line(self.true_traj, width=2, fill="black")
         self.canvas.create_line(self.agent_traj, width=2, fill="red")
@@ -158,3 +158,9 @@ class CurveEnv(gym.Env):
         x1 = x + r
         y1 = y + r
         return x0, y0, x1, y1
+
+
+register(
+    id='curve-v0',
+    entry_point='deeprl.envs.curve:CurveEnv',
+)
