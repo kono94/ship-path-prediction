@@ -29,7 +29,6 @@ class ReplayBuffer(object):
         
         self.mem_pos += 1
         
-        
     def sample(self, batch_size: int):
         lower_bound = min(self.mem_pos, self.max_size)
         

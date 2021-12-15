@@ -186,7 +186,6 @@ if __name__ == "__main__":
 
     nr_of_states = env.observation_space.shape[0]
     nr_of_actions = env.action_space.shape[0]
-
     logger.info(env.observation_space)
 
     agent = DDPG(nr_of_states, nr_of_actions, args)

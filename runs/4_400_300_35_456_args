@@ -3,7 +3,7 @@
   "env": 4,
   "hidden1": 400,
   "hidden2": 300,
-  "actor_lr_rate": 0.0001,
+  "actor_lr_rate": 0.001,
   "critic_lr_rate": 0.001,
   "warmup": 8000,
   "gamma": 0.99,

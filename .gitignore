@@ -1,3 +1,6 @@
+output/
+imitation/
+
 *.zip
 /.vscode
 /*.venv
