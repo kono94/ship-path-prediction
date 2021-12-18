@@ -183,7 +183,7 @@ class CurveEnv(gym.Env):
             or next_agent_x > self.width
             or next_agent_x < 0
             or self.step_count > 1000
-            or dist_from_path > 50
+            #or dist_from_path > 50
         )
         if done or reward < 0.001:
             reward = 0
