@@ -1,6 +1,6 @@
 import gym
 import numpy as np
-from deeprl.envs.curve import CurveEnv
+from deeprl.envs.curve_base import CurveEnv
 from deeprl.envs.golf import GolfHiddenHoles
 from stable_baselines3 import DDPG, TD3, SAC
 from stable_baselines3.common.noise import NormalActionNoise, OrnsteinUhlenbeckActionNoise

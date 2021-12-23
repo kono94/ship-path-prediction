@@ -18,7 +18,7 @@ from imitation.data import rollout
 from imitation.algorithms import bc
 from imitation.algorithms.adversarial import gail
 
-from deeprl.envs.curve import CurveEnv
+from deeprl.envs.curve_base import CurveEnv
 import deeprl.common.util as util
 
 torch.manual_seed(3)
@@ -145,7 +145,8 @@ if __name__ == "__main__":
         type=int,
         help="hidden num of second fully connect layer in policy network",
     )
-    parser.add_argument("--training_steps", default=50000, type=int, help="")
+    parser.add_argument("--training_steps", default=50000, type=int, help=""),
+    parser.add_argument("--animation_delay", default=0.1, type=float, help=""),
     parser.add_argument(
         "--policy_path", default="policy.pth", type=str, help="Load policy and visual in env"
     )
@@ -168,5 +169,5 @@ if __name__ == "__main__":
         if args.policy_path == "":
             print("Provide a path to a saved policy in parameter --policy_path")
             sys.exit(2)
-        venv = ut.make_vec_env(args.env, n_envs=1, env_make_kwargs={'animation_delay': 0.2})
+        venv = ut.make_vec_env(args.env, n_envs=1, env_make_kwargs={'animation_delay': args.animation_delay})
         policy_in_action(venv, bc.reconstruct_policy(args.policy_path))

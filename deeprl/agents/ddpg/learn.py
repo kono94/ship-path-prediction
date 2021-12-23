@@ -18,7 +18,7 @@ from deeprl.common.evaluator import Evaluator
 from deeprl.common.visualizer import Visualizer
 from scipy.io import savemat
 from deeprl.envs.golf import GolfHiddenHoles
-from deeprl.envs.curve import CurveEnv
+from deeprl.envs.curve_base import CurveEnv
 import json
 
 logging.config.fileConfig('logger.conf')
