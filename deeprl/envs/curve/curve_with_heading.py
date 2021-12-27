@@ -24,19 +24,19 @@ class CurveWithHeading(CurveBase):
         )
 
     def _step_observation(self):
-        return self._normalize_state([self.agent_position.x, self.agent_position.y, self.agent_heading])
+        return self._normalize_state([self.agent_position.x, self.agent_position.y, self.heading])
     
-    def _expert_output(self, last_pos, heading, speed):
-        return self._normalize_state([last_pos.x, last_pos.y, heading]), \
-               self._normalize_action([heading])
+    def _expert_output(self, last_pos, last_heading, last_speed, expert_heading, expert_speed):
+        return self._normalize_state([last_pos.x, last_pos.y, last_heading]), \
+               self._normalize_action([expert_heading])
                
     def reset(self):
         super()._reset()
-        return self._normalize_state([10, 10, self.agent_heading])
+        return self._normalize_state([10, 10, self.heading])
     
     def reset_deterministically(self, idx):
         super()._reset_deterministically(idx)
-        return self._normalize_state([10, 10, self.agent_heading])
+        return self._normalize_state([10, 10, self.heading])
     
 register(
     id="curve-heading-v0",

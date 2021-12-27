@@ -36,7 +36,7 @@ def policy_in_action(venv, policy):
     while True:
         action, _ = policy.predict(obs, deterministic=True)
         obs, _, dones, _ = venv.step(action)
-        venv.render()
+        venv.render(False)
         if dones:
             obs = venv.reset()
 

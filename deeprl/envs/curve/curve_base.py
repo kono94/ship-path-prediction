@@ -174,14 +174,17 @@ class CurveBase(gym.Env):
             or self.step_count > 1000
         )
 
-        norm_last_obs, norm_action = self._expert_output(last_pos, heading, speed)
+        norm_last_obs, norm_action = self._expert_output(last_pos, self.last_heading, self.last_speed, heading, speed)
 
         if done:
             # clip values to stay in observation space when leaving the world
             next_x_clipped = np.clip(next_pos.x, 0, self.height)
             next_y_clipped = np.clip(next_pos.y, 0, self.width)
-            self.final_obs,_ = self._expert_output(Position(next_x_clipped, next_y_clipped), heading, speed)
+            self.final_obs,_ = self._expert_output(Position(next_x_clipped, next_y_clipped), self.last_heading, self.last_speed, heading, speed)
+            
         self.last_speed = speed
+        self.last_heading = heading
+        
         return norm_last_obs, norm_action, {}, done
 
     def generate_heading(self, step_count):
@@ -257,9 +260,14 @@ class CurveBase(gym.Env):
         )
         self.current_generator_curve = current_generator["func"]
         # only used for expert trajectory generation
-        self.agent_speed = self.min_speed
-        self.agent_heading = self.generate_heading(0)
+        self.speed= self.min_speed
+        self.heading = self.generate_heading(0)
+        self.last_heading = self.heading
         self.last_speed = self.min_speed
+        
+        self.agent_heading = self.heading
+        self.agent_speed = self.speed
+        
         self._reset_starting_pos(current_generator["starting_pos"])
 
     def _reset(self):
