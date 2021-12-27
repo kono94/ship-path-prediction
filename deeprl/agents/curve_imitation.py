@@ -1,13 +1,10 @@
 import argparse
 import gym
-import math
 import pickle
-import pathlib
 import random
 import sys
-import tempfile
 import torch
-
+from argparse import Namespace
 import numpy as np
 import stable_baselines3 as sb3
 import torch as th
@@ -18,18 +15,19 @@ from imitation.data import rollout
 from imitation.algorithms import bc
 from imitation.algorithms.adversarial import gail
 
-from deeprl.envs.curve_base import CurveEnv
-import deeprl.common.util as util
+# needs to be imported to register the custom environments
+import deeprl.envs.curve
 
-torch.manual_seed(3)
-# most crucial to shuffle deterministically
-torch.use_deterministic_algorithms(True)
-random.seed(3)
-np.random.default_rng(3)
+def set_seed(seed):
+    torch.manual_seed(seed)
+    # most crucial (and hidden) to shuffle deterministically
+    torch.use_deterministic_algorithms(True)
+    random.seed(seed)
+    np.random.default_rng(seed)
 
 
 class CustomFeedForwardPolicy(sb3.common.policies.ActorCriticPolicy):
-    def __init__(self, net_arch=[128, 128], *args, **kwargs):
+    def __init__(self, net_arch, *args, **kwargs):
         super().__init__(*args, **kwargs, net_arch=net_arch)
 
 
@@ -41,7 +39,6 @@ def policy_in_action(venv, policy):
         venv.render()
         if dones:
             obs = venv.reset()
-
 
 
 def sample_expert_demonstrations(sample_env):
@@ -57,21 +54,20 @@ def sample_expert_demonstrations(sample_env):
             obs.append(transition[0])
             actions.append(transition[1])
             infos.append(transition[2])
-            done = transition[3]
+            done = transition[3]    
         obs.append(sample_env.final_obs)
         trajectory_list.append(
             Trajectory(np.array(obs), np.array(actions), np.array(infos), terminal=True)
         )
-    with open("curve_expert_trajectory.pickle", "wb") as handle:
-        pickle.dump(trajectory_list, handle)
+    #with open("curve_expert_trajectory.pickle", "wb") as handle:
+   #     pickle.dump(trajectory_list, handle)
 
-    with open("curve_expert_trajectory.pickle", "rb") as f:
+  #  with open("curve_expert_trajectory.pickle", "rb") as f:
         # This is a list of `imitation.data.types.Trajectory`, where
         # every instance contains observations and actions for a single expert
         # demonstration.
-        trajectories = pickle.load(f)
-
-    return rollout.flatten_trajectories(trajectories)
+    #    trajectories = pickle.load(f)
+    return rollout.flatten_trajectories(trajectory_list)
 
 
 def train_BC(venv, expert_transitions, steps, net_arch, policy_save_path):
@@ -132,7 +128,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--algo", default="bc", type=str, help="algorithm to use; 'bc', 'gail'"
     )
-    parser.add_argument("--env", default="curve-v0", type=str, help="Environment;")
+    parser.add_argument("--env", default="curve-simple-v0", type=str, help="Environment;")
     parser.add_argument(
         "--hidden1",
         default=128,
@@ -146,13 +142,16 @@ if __name__ == "__main__":
         help="hidden num of second fully connect layer in policy network",
     )
     parser.add_argument("--training_steps", default=50000, type=int, help=""),
+    parser.add_argument("--seed", default=3, type=int, help=""),
     parser.add_argument("--animation_delay", default=0.1, type=float, help=""),
     parser.add_argument(
         "--policy_path", default="policy.pth", type=str, help="Load policy and visual in env"
     )
 
     args = parser.parse_args()
-    
+    #args = Namespace(algo='bc', animation_delay=1.0, env='curve-simple-v0', hidden1=128, hidden2=128, mode='test', policy_path='bc_policy.pth', training_steps=50000)
+
+    set_seed(args.seed)
     
     if args.mode == "train":
         venv = ut.make_vec_env(args.env, n_envs=1)

@@ -1,21 +1,27 @@
+from tkinter.constants import N
 from typing import Tuple
 import gym
-from gym import spaces
 import numpy as np
 
 import random
-import threading
 import math
 import time
+
 import deeprl.common.util as util
 from scipy.stats import norm
-from gym.envs.registration import register
 
 
 class Position:
     def __init__(self, x, y) -> None:
         self.x = x
         self.y = y
+
+    def to_tuples(positions):
+        tuples = list()
+        for i, elem in enumerate(positions):
+            tuples.append((elem.x, elem.y))
+
+        return tuples
 
 
 class CurveBase(gym.Env):
@@ -39,6 +45,8 @@ class CurveBase(gym.Env):
         self.animation_delay = animation_delay
         self.width = 700
         self.height = 500
+        self.min_speed = 5
+        self.max_speed = 40
 
         # Sub-classes do not have to utilize all of them and just define a
         # subset of them
@@ -46,7 +54,7 @@ class CurveBase(gym.Env):
             0: {"name": "x position", "min": 0, "max": self.width},
             1: {"name": "y position", "min": 0, "max": self.height},
             2: {"name": "heading / angle", "min": -math.pi, "max": math.pi},
-            3: {"name": "current speed", "min": 5, "max": 40},
+            3: {"name": "current speed", "min": self.min_speed, "max": self.max_speed},
         }
 
         self.ACTION_DEFINITION_SET = {
@@ -94,7 +102,7 @@ class CurveBase(gym.Env):
         self.agent_position = None
         self.agent_heading = None
         self.agent_speed = None
-        self.agent_reward = None
+        self.agent_reward = 0
 
         self.master = None
 
@@ -108,7 +116,7 @@ class CurveBase(gym.Env):
         self.position = pos
 
     def _normalization_helper(self, object, range_definition, denormalize=False):
-        tmp = np.empty_like(object)
+        tmp = np.empty_like(object, dtype=np.float32)
         for i, elem in enumerate(object):
             tmp[i] = (
                 util.lmap(
@@ -146,6 +154,10 @@ class CurveBase(gym.Env):
         next_pos = Position(next_x, next_y)
         return next_pos
 
+    def _expert_output(self, last_pos, heading, speed):
+        return self._normalize_state([last_pos.x, last_pos.y]), \
+               self._normalize_action([heading])
+               
     def step_expert(self):
         self.step_count += 1
         last_pos = self.true_traj[-1]
@@ -162,29 +174,24 @@ class CurveBase(gym.Env):
             or self.step_count > 1000
         )
 
-        last_obs = self._normalize_state([last_pos[0], last_pos[1], self.last_speed])
-        # action = self._normalize_action([pre_curve, pre_speed])
-        action = self._normalize_action([heading])
+        norm_last_obs, norm_action = self._expert_output(last_pos, heading, speed)
 
         if done:
             # clip values to stay in observation space when leaving the world
             next_x_clipped = np.clip(next_pos.x, 0, self.height)
             next_y_clipped = np.clip(next_pos.y, 0, self.width)
-            self.final_obs = self._normalize_state(
-                [next_x_clipped, next_y_clipped, speed]
-            )
+            self.final_obs,_ = self._expert_output(Position(next_x_clipped, next_y_clipped), heading, speed)
         self.last_speed = speed
-
-        return last_obs, action, {}, done
+        return norm_last_obs, norm_action, {}, done
 
     def generate_heading(self, step_count):
         return self.current_generator_curve(step_count)
 
-    def _set_agent_heading(self):
-        self.agent_heading = self.current_action[0]
+    def _next_agent_heading(self):
+        return self.current_action[0]
 
-    def _set_agent_speed(self):
-        self.agent_speed = self.speed
+    def _next_agent_speed(self):
+        return self.speed
 
     def _calculate_reward(self, dist_to_path):
         return norm.pdf(dist_to_path, 0, 5) * 12.5331  # scale amplitude to 1
@@ -205,8 +212,8 @@ class CurveBase(gym.Env):
         self.true_traj.append(self.position)
 
         # Agent calculation
-        self.agent_heading = self._set_agent_heading()
-        self.agent_speed = self._set_agent_speed()
+        self.agent_heading = self._next_agent_heading()
+        self.agent_speed = self._next_agent_speed()
         self.agent_position = self._calc_next_position(
             self.agent_position, self.agent_heading, self.agent_speed
         )
@@ -243,16 +250,16 @@ class CurveBase(gym.Env):
     def _reset_env(self, deterministic_idx=None):
         self.step_count = 0
         self.rng = np.random.default_rng(self._rng_seed)
-        # only used for expert trajectory generation
-        self.agent_speed = self.min_speed
-        self.agent_heading = self.generate_heading(0)
-
         self.current_generator_name, current_generator = (
             list(self.trajectories.items())[deterministic_idx]
-            if not deterministic_idx
+            if deterministic_idx is not None
             else random.choice(list(self.trajectories.items()))
         )
         self.current_generator_curve = current_generator["func"]
+        # only used for expert trajectory generation
+        self.agent_speed = self.min_speed
+        self.agent_heading = self.generate_heading(0)
+        self.last_speed = self.min_speed
         self._reset_starting_pos(current_generator["starting_pos"])
 
     def _reset(self):
@@ -261,8 +268,9 @@ class CurveBase(gym.Env):
     def _reset_deterministically(self, idx):
         self._reset_env(idx)
 
-    def render(self, mode="human"):
+    def render(self, sampling=False):
         if self.master == None:
+            global tk
             import tkinter as tk
 
             self.master = tk.Tk()
@@ -271,37 +279,50 @@ class CurveBase(gym.Env):
                 self.master, width=self.width, height=self.height, bg="white"
             )
             self.canvas.pack()
+        true_traj_tuples = Position.to_tuples(self.true_traj)
+        agent_traj_tuples = Position.to_tuples(self.agent_traj)
         self.canvas.delete("all")
-        self.canvas.create_line(self.true_traj, width=2, fill="black")
-        self.canvas.create_line(self.agent_traj, width=2, fill="red")
+
+        if not sampling:
+            self.canvas.create_line(agent_traj_tuples, width=2, fill="red")
+            self.canvas.create_oval(
+                self._generate_circle_coords(*agent_traj_tuples[-1], r=5), fill="red"
+            )
+            self.canvas.create_text(
+                400,
+                20,
+                fill="red",
+                font="Times 10",
+                text=f"[{agent_traj_tuples[-1][0]}, {agent_traj_tuples[-1][1]}] speed: {round(self.agent_speed)} heading: {round(self.agent_heading, 3)}",
+                anchor=tk.NW,
+            )
+            self.canvas.create_text(
+                500,
+                40,
+                fill="black",
+                font="Times 10",
+                text=f"reward: {round(self.agent_reward, 3)}",
+                anchor=tk.NW,
+            )
+            self.canvas.create_text(
+                400,
+                100,
+                fill="black",
+                font="Times 10",
+                text=f"Trajectory: {self.current_generator_name}",
+            )
+        else:
+            self.canvas.create_text(
+                400,
+                100,
+                fill="black",
+                font="Times 10",
+                text=f"CURRENTLY SAMPING EXPERT TRAJECTORY FOR: \n {self.current_generator_name}",
+            )
+
+        self.canvas.create_line(true_traj_tuples, width=2, fill="black")
         self.canvas.create_oval(
-            self._generate_circle_coords(*self.true_traj[-1], r=5), fill="black"
-        )
-        self.canvas.create_oval(
-            self._generate_circle_coords(*self.agent_traj[-1], r=5), fill="red"
-        )
-        self.canvas.create_text(
-            500,
-            20,
-            fill="red",
-            font="Times 10",
-            text=f"[{self.agent_traj[-1][0]}, {self.agent_traj[-1][1]}] speed: {round(self.agent_speed)} heading: {round(self.agent_heading, 3)}",
-            anchor=tk.NW,
-        )
-        self.canvas.create_text(
-            500,
-            40,
-            fill="black",
-            font="Times 10",
-            text=f"reward: {round(self.agent_reward, 3)}",
-            anchor=tk.NW,
-        )
-        self.canvas.create_text(
-            400,
-            100,
-            fill="black",
-            font="Times 10",
-            text=f"Trajectory: {self.current_generator_name}",
+            self._generate_circle_coords(*true_traj_tuples[-1], r=5), fill="black"
         )
         self.master.update()
         time.sleep(self.animation_delay)
@@ -315,13 +336,3 @@ class CurveBase(gym.Env):
         x1 = x + r
         y1 = y + r
         return x0, y0, x1, y1
-
-
-print("REGISTER")
-register(
-    id="curve-v0",
-    entry_point="deeprl.envs.curve:CurveEnv",
-)
-
-k = CurveBase()
-k._normalize_action([0.3, 6])

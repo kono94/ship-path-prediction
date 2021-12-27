@@ -2,7 +2,7 @@ import numpy as np
 from gym.envs.registration import register
 from gym import spaces
 
-from deeprl.envs.curve_base import CurveBase
+from deeprl.envs.curve.curve_base import CurveBase
 import deeprl.common.util as util
 
 class CurveSimpleState(CurveBase):
@@ -23,8 +23,12 @@ class CurveSimpleState(CurveBase):
         )
 
     def _step_observation(self):
-        return self._normalize_state(self.agent_position.x, self.agent_position.y)
+        return self._normalize_state([self.agent_position.x, self.agent_position.y])
     
+    def _expert_output(self, last_pos, heading, speed):
+        return self._normalize_state([last_pos.x, last_pos.y]), \
+               self._normalize_action([heading])
+               
     def reset(self):
         super()._reset()
         return self._normalize_state([10, 10])
@@ -36,6 +40,6 @@ class CurveSimpleState(CurveBase):
 
     
 register(
-    id="curve-v0",
-    entry_point="deeprl.envs.curve_simple:CurveSimpleState",
-)
+    id="curve-simple-v0",
+    entry_point="deeprl.envs.curve.curve_simple:CurveSimpleState",
+)           
