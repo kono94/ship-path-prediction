@@ -23,7 +23,9 @@ def set_seed(seed):
     # most crucial (and hidden) to shuffle deterministically
     torch.use_deterministic_algorithms(True)
     random.seed(seed)
+    np.random.seed(seed)
     np.random.default_rng(seed)
+
 
 
 class CustomFeedForwardPolicy(sb3.common.policies.ActorCriticPolicy):
@@ -54,11 +56,13 @@ def sample_expert_demonstrations(sample_env):
             obs.append(transition[0])
             actions.append(transition[1])
             infos.append(transition[2])
-            done = transition[3]    
+            done = transition[3]
+            sample_env.render(True)
         obs.append(sample_env.final_obs)
         trajectory_list.append(
             Trajectory(np.array(obs), np.array(actions), np.array(infos), terminal=True)
         )
+        
     #with open("curve_expert_trajectory.pickle", "wb") as handle:
    #     pickle.dump(trajectory_list, handle)
 

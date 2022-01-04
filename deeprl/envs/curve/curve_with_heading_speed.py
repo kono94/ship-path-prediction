@@ -18,7 +18,7 @@ class CurveWithHeadingAndSpeed(CurveBase):
         super().__init__(animation_delay=animation_delay)
         self.action_space = spaces.Box(low=-1, high=1, shape=(2,), dtype=np.float32)
         self.observation_space = spaces.Box(
-            low=-1, high=1, shape=(3,), dtype=np.float32
+            low=-1, high=1, shape=(4,), dtype=np.float32
         )
         
     def _step_observation(self):
@@ -27,14 +27,17 @@ class CurveWithHeadingAndSpeed(CurveBase):
     def _expert_output(self, last_pos, last_heading, last_speed, expert_heading, expert_speed):
         return self._normalize_state([last_pos.x, last_pos.y, last_heading, last_speed]), \
                self._normalize_action([expert_heading, expert_speed])
-      
+    
+    def _next_agent_speed(self):
+        return self.current_action[1]
+    
     def reset(self):
         super()._reset()
-        return self._normalize_state([self.last_position.x, self.last_position.y, self.last_heading, self.last_speed])
+        return self._normalize_state([self.agent_position.x, self.agent_position.y, self.heading, self.speed])
     
     def reset_deterministically(self, idx):
         super()._reset_deterministically(idx)
-        return self._normalize_state([self.last_position.x, self.last_position.y, self.last_heading, self.last_speed])
+        return self._normalize_state([self.agent_position.x, self.agent_position.y, self.heading, self.speed])
 
 
 register(

@@ -32,11 +32,11 @@ class CurveWithHeading(CurveBase):
                
     def reset(self):
         super()._reset()
-        return self._normalize_state([10, 10, self.heading])
+        return self._normalize_state([self.agent_position.x, self.agent_position.y, self.heading])
     
     def reset_deterministically(self, idx):
         super()._reset_deterministically(idx)
-        return self._normalize_state([10, 10, self.heading])
+        return self._normalize_state([self.agent_position, self.agent_position, self.heading])
     
 register(
     id="curve-heading-v0",

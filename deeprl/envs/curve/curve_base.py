@@ -71,9 +71,13 @@ class CurveBase(gym.Env):
 
         # Curves to be generated
         self.trajectories = {
+            # "circle": {
+            #      "starting_pos": (350, 100),
+            #      "func": lambda t: 0.15 * t,
+            # },
             "sinus-small": {
-                "starting_pos": (20, 400),
-                "func": lambda t: math.sin(t / 1.5) - math.pi / 6,
+                 "starting_pos": (20, 400),
+                 "func": lambda t: math.sin(t / 1.5) - math.pi / 6,
             },
             "sinus-big": {
                 "starting_pos": (400, 20),
@@ -84,6 +88,19 @@ class CurveBase(gym.Env):
                 "func": lambda t: math.sin(t / 4) + math.pi / 6,
             },
         }
+        
+        for i in range(0):
+            x = random.randint(18, 35)
+            y = random.randint(8, 12)
+            a = np.random.uniform(3.7, 4.3)
+            b = np.random.uniform(5.7, 6.3)
+            c = np.random.uniform(0.37, 0.43)
+            start = random.randint(14, 16)
+            finish = start + random.randint(15, 19)
+            self.trajectories[f'circle{i}'] = {
+                "starting_pos": (x, y),
+                "func": lambda t:math.sin(t / a) + math.pi / b if t < start or t > finish else c * t,
+            }
         self.current_generator_curve = None
         self.current_generator_name = None
 

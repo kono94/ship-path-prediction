@@ -31,11 +31,11 @@ class CurveSimpleState(CurveBase):
                
     def reset(self):
         super()._reset()
-        return self._normalize_state([10, 10])
+        return self._normalize_state([self.agent_position.x, self.agent_position.y])
     
     def reset_deterministically(self, idx):
         super()._reset_deterministically(idx)
-        return self._normalize_state([10, 10])
+        return self._normalize_state([self.agent_position.x, self.agent_position.y])
     
 
     
