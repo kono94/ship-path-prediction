@@ -75,28 +75,28 @@ class CurveBase(gym.Env):
             #      "starting_pos": (350, 100),
             #      "func": lambda t: 0.15 * t,
             # },
-            "sinus-small": {
-                 "starting_pos": (20, 400),
-                 "func": lambda t: math.sin(t / 1.5) - math.pi / 6,
-            },
-            "sinus-big": {
-                "starting_pos": (400, 20),
-                "func": lambda t: math.sin(t / 2) + math.pi * 0.6,
-            },
-            "sinus-ultra": {
-                "starting_pos": (10, 10),
-                "func": lambda t: math.sin(t / 4) + math.pi / 6,
-            },
+            # "sinus-small": {
+            #      "starting_pos": (20, 400),
+            #      "func": lambda t: math.sin(t / 1.5) - math.pi / 6,
+            # },
+            # "sinus-big": {
+            #     "starting_pos": (400, 20),
+            #     "func": lambda t: math.sin(t / 2) + math.pi * 0.6,
+            # },
+            # "sinus-ultra": {
+            #     "starting_pos": (10, 10),
+            #     "func": lambda t: math.sin(t / 4) + math.pi / 6,
+            # },
         }
         
-        for i in range(0):
-            x = random.randint(18, 35)
-            y = random.randint(8, 12)
-            a = np.random.uniform(3.7, 4.3)
+        for i in range(5):
+            x = random.randint(19, 37)
+            y = random.randint(7, 15)
+            a = np.random.uniform(3.6, 4.4)
             b = np.random.uniform(5.7, 6.3)
             c = np.random.uniform(0.37, 0.43)
-            start = random.randint(14, 16)
-            finish = start + random.randint(15, 19)
+            start = 17
+            finish = start + 19
             self.trajectories[f'circle{i}'] = {
                 "starting_pos": (x, y),
                 "func": lambda t:math.sin(t / a) + math.pi / b if t < start or t > finish else c * t,
@@ -251,7 +251,7 @@ class CurveBase(gym.Env):
             or self.agent_position.x > self.width
             or self.agent_position.x < 0
             or self.step_count > 1000
-            or dist_to_path > 50
+           # or dist_to_path > 50
         )
 
         if done or reward < 0.001:
@@ -311,7 +311,7 @@ class CurveBase(gym.Env):
         if not sampling:
             self.canvas.create_line(agent_traj_tuples, width=2, fill="red")
             self.canvas.create_oval(
-                self._generate_circle_coords(*agent_traj_tuples[-1], r=5), fill="red"
+                self._generate_circle_coords(*agent_traj_tuples[-1], r=3), fill="red"
             )
             self.canvas.create_text(
                 400,
@@ -347,7 +347,7 @@ class CurveBase(gym.Env):
 
         self.canvas.create_line(true_traj_tuples, width=2, fill="black")
         self.canvas.create_oval(
-            self._generate_circle_coords(*true_traj_tuples[-1], r=5), fill="black"
+            self._generate_circle_coords(*true_traj_tuples[-1], r=2), fill="black"
         )
         self.master.update()
         time.sleep(self.animation_delay)

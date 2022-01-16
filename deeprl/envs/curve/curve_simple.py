@@ -25,9 +25,9 @@ class CurveSimpleState(CurveBase):
     def _step_observation(self):
         return self._normalize_state([self.agent_position.x, self.agent_position.y])
     
-    def _expert_output(self, last_pos, heading, speed):
+    def _expert_output(self, last_pos, last_heading, last_speed, expert_heading, expert_speed):
         return self._normalize_state([last_pos.x, last_pos.y]), \
-               self._normalize_action([heading])
+               self._normalize_action([expert_heading])
                
     def reset(self):
         super()._reset()
