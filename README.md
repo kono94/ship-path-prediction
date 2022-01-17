@@ -7,3 +7,12 @@ pip install -r requirements.txt
 export PYTHONPATH=$(pwd)
 ```
 
+#### Installing PROJ version 8 (requirement for movingpandas)
+```bash
+ mkdir ~/GPS
+ cd ~/GPS
+ wget https://download.osgeo.org/proj/proj-8.0.0.tar.gz
+ tar xzvf proj-8.0.0.tar.gz
+
+ cd proj-8.0.0
+ ```
