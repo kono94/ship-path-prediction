@@ -15,4 +15,17 @@ export PYTHONPATH=$(pwd)
  tar xzvf proj-8.0.0.tar.gz
 
  cd proj-8.0.0
+
+ mkdir build
+ cd build
+
+ ccmake .. -DCMAKE_INSTALL_PREFIX=/usr
+ cmake --build . -j2
+ sudo cmake --build . --target install
+ ```
+
+ ### Install GEOS (needs ubuntu 20.04+)
+ ```bash
+ sudo apt update
+ sudo apt install libgeos++-dev libgeos-3.8.0 libgeos-c1v5 libgeos-dev libgeos-doc
  ```
