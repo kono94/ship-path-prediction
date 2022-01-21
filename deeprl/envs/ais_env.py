@@ -82,7 +82,8 @@ class AISenv(core.Env):
         return self.scale * (self.state - self.shift)
     
     def step(self, action):
-        if not self.the_end:
+        done = bool(self.step_counter >= self.length_episode-1)
+        if not done:
             # Read current agent state and agent's action
             lat_agent = self.agent_traj[int(self.step_counter / self.time_multipler)][0]
             lon_agent = self.agent_traj[int(self.step_counter / self.time_multipler)][1]
@@ -120,7 +121,7 @@ class AISenv(core.Env):
             reward = self.finish()
         # The agent's networks need normalized observations 
         observation = self.scale * (self.state - self.shift)
-        return observation, reward, self.the_end, {}
+        return observation, reward, done, {}
     
     def render(self):
         #print(self.pos_pred[:,0])
@@ -152,12 +153,8 @@ class AISenv(core.Env):
         plt.draw()
         plt.pause(0.0001)
         plt.clf()
-        time.sleep(0.01)
-    
-    @property
-    def the_end(self):
-        return bool(self.step_counter >= self.length_episode-1)
-    
+        time.sleep(0.3)
+        
     def finish(self, reset_trajectory_index=False):
         self.step_counter = 0
         self.episode = 0 if reset_trajectory_index else self.trajectory_index + 1
