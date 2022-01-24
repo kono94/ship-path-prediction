@@ -1,6 +1,6 @@
 import gym
 import numpy as np
-from deeprl.envs.curve_base import CurveEnv
+import deeprl.envs.curve
 from deeprl.envs.golf import GolfHiddenHoles
 from stable_baselines3 import DDPG, TD3, SAC
 from stable_baselines3.common.noise import NormalActionNoise, OrnsteinUhlenbeckActionNoise
@@ -20,7 +20,7 @@ np.random.default_rng(SEED)
         
 #env = DummyVecEnv([lambda: gym.make("curve-v0")])
 #env = VecNormalize(env, norm_obs=True, norm_reward=False)
-env = CurveEnv()
+env = gym.make('curve-simple-v0')
 
 model = TD3.load("curve_DDPG_300k400300", env=env)
 

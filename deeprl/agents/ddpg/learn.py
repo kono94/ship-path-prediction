@@ -18,7 +18,7 @@ from deeprl.common.evaluator import Evaluator
 from deeprl.common.visualizer import Visualizer
 from scipy.io import savemat
 from deeprl.envs.golf import GolfHiddenHoles
-from deeprl.envs.curve_base import CurveEnv
+import deeprl.envs.curve
 import json
 
 logging.config.fileConfig('logger.conf')
@@ -179,7 +179,7 @@ if __name__ == "__main__":
     elif args.env == 3:
         env = GolfHiddenHoles()
     elif args.env == 4:
-        env = CurveEnv(0.05)
+        env = gym.make('curve-simple-v0', animation_delay=0.05)
 
     if args.seed > 0:
         util.seeding(args.seed, env)
