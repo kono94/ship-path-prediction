@@ -12,6 +12,8 @@ from gym.envs.registration import register
 import matplotlib.pyplot as plt
 import random
 import sys
+from scipy.stats import norm
+
 # State boundaries
 MIN_LON, MAX_LON = 8.4361, 8.5927
 MIN_LAT, MAX_LAT = 53.4570, 53.6353
@@ -47,7 +49,7 @@ class AISenv(core.Env):
         # Trajectory ID column 'traj_id'
         self.df = pd.read_csv(dataset)
         self.num_trajectories = self.df.groupby('traj_id').count().shape[0]
-        self.trajetory_list = list(self.df.groupby('traj_id'))
+        self.trajectory_list = list(self.df.groupby('traj_id'))
         self.time_interval_secs = time_interval
         
         # Observations: lon, lat, cog, sog, dt
@@ -78,9 +80,9 @@ class AISenv(core.Env):
         self.step_counter = 0
         self.trajectory_index = self.trajectory_index + 1
         if self.trajectory_index >= self.num_trajectories:
-            self.trajetory_list = random.shuffle(self.trajetory_list)
+            random.shuffle(self.trajectory_list)
             self.trajectory_index = 0
-        self.episode_df = self.trajetory_list[self.trajectory_index][1]
+        self.episode_df = self.trajectory_list[self.trajectory_index][1]
         self.episode_df = self.episode_df[['lat', 'lon', 'cog', 'sog']]
         self.length_episode = self.episode_df.shape[0] 
         self.state = self[0]
@@ -130,9 +132,11 @@ class AISenv(core.Env):
             #print(f'TRUE: {self.state[3]} PRED: {sog_a}')
             # If the agent is self-looping, modify the next state accordingly
             self.state = self.state if self.training else np.array([lat_pred, lon_pred, cog_pred])
-            # Compute the error committed by the agent's state suggestion
-            geo_dist = geopy.distance.distance((lat_pred, lon_pred), (lat_true, lon_true)).meters
-            reward = 0
+            # Compute the error based on the path track error
+            geo_dist_meters = geopy.distance.distance((lat_pred, lon_pred), (lat_true, lon_true)).meters
+            reward = norm.pdf(geo_dist_meters, 0, 50) * 125.3315
+            if reward < 0.001:
+                reward = 0
             #print(geo_dist)
             # Record predictions and observations of vessel location
             self.agent_traj = np.concatenate((self.agent_traj, np.array([[lat_pred, lon_pred]])), axis=0)
@@ -207,6 +211,8 @@ def run_agent_env_loop(env, agent, random_process,
         if render: env.render()
         
 
+a = AISenv()
+print(a.num_trajectories)
     
 register(
     id="ais-v0",
