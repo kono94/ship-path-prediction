@@ -17,8 +17,10 @@ import imitation.util.util as ut
 from imitation.data.types import Trajectory
 from imitation.data import rollout
 from imitation.algorithms import bc
+from imitation.rewards import reward_nets
 from imitation.algorithms.adversarial import gail
 from imitation.policies import serialize
+from stable_baselines3.common import base_class
 
 # needs to be imported to register the custom environments
 import deeprl.envs.curve
@@ -51,6 +53,8 @@ def policy_in_action(venv, policy, nr_samples, evalution_path):
         done = False
         while not done:
             action, _ = policy.predict(obs, deterministic=True)
+            print(obs)
+            print(action)
             obs, reward, done, _ = venv.step(action)
             cum_reward += reward[0]
             t += 1
@@ -58,10 +62,12 @@ def policy_in_action(venv, policy, nr_samples, evalution_path):
         if done:
             obs = venv.reset()
             df = df.append({'id': i+1, 'ep_length': t, 'cum_reward': cum_reward, 'performance': cum_reward/t}, ignore_index=True)
+            print(f"'id': {i+1}, 'ep_length': {t}, 'cum_reward': {cum_reward}, 'performance': {cum_reward/t}")
            # print(f'cum:{cum_reward} t:{t}')
             cum_reward = 0
             t = 0
-            
+    with open("results.txt", "a") as myfile:
+        myfile.write(f'{df["performance"].mean()} \n')        
     df.to_csv(evalution_path)
 
 
@@ -119,25 +125,39 @@ def train_GAIL(venv, expert_transitions, steps, net_arch, policy_save_path):
     GAIL, and AIRL also accept as `demonstrations` any Pytorch-style DataLoader that
     iterates over dictionaries containing observations, actions, and next_observations.
     """
+    # the noise objects for DDPG
+    n_actions = venv.action_space.shape[-1]
+    action_noise = sb3.common.noise.NormalActionNoise(mean=np.zeros(n_actions), sigma=0.1 * np.ones(n_actions))
+    policy_kwargs = dict(net_arch=dict(pi=[400,300], qf=[400,300]))
+    gail_reward_net = reward_nets.BasicRewardNet(
+            observation_space=venv.observation_space,
+            action_space=venv.action_space,
+        )
     gail_trainer = gail.GAIL(
         venv=venv,
         demonstrations=expert_transitions,
-        demo_batch_size=32,
-        gen_algo=sb3.PPO(
-            sb3.common.policies.ActorCriticPolicy,
-            venv,
+        demo_batch_size=64,
+        gen_algo=sb3.DDPG(
+            "MlpPolicy",
+            #sb3.common.policies.ActorCriticPolicy,
+            env=venv,
+            action_noise=action_noise,
             verbose=1,
-            batch_size=32,
-            n_epochs=3,
-            policy_kwargs={"net_arch": net_arch},
-    ),
-    # gen_algo=sb3.DDPG("MlpPolicy", venv, verbose=1),
-    allow_variable_horizon=True,
+            batch_size=64,
+            #n_epochs=3,
+            policy_kwargs=policy_kwargs,
+        ),
+        reward_net=gail_reward_net,
+        # gen_algo=sb3.DDPG("MlpPolicy", venv, verbose=1),
+        allow_variable_horizon=True,
     )
 
     gail_trainer.train(total_timesteps=steps)
-    th.save(gail_trainer.policy, policy_save_path)
-
+    gail_trainer.gen_algo.save(f'{policy_save_path}.zip')
+    print(f'{policy_save_path}.zip')
+    print(gail_trainer.gen_algo.predict([0.5, 0.9, 0.5, 0.6]))
+    #th.save(gail_trainer.policy, policy_save_path)
+    
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(
@@ -209,5 +229,6 @@ if __name__ == "__main__":
         if args.algo == "bc":
             policy_in_action(venv, bc.reconstruct_policy(args.policy_path), args.n_samples, args.evaluation_path)
         elif args.algo == "gail":
-            policy = th.load(args.policy_path, map_location=utils.get_device("auto"))
+            policy = sb3.DDPG.load(f'{args.policy_path}.zip') 
+           # th.load(f'{args.policy_path}.zip', device='auto')
             policy_in_action(venv, policy, args.n_samples, args.evaluation_path)
