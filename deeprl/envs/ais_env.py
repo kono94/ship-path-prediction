@@ -15,8 +15,8 @@ import sys
 from scipy.stats import norm
 
 # State boundaries
-MIN_LON, MAX_LON = 8.4361, 8.5927
-MIN_LAT, MAX_LAT = 53.4570, 53.6353
+MIN_LON, MAX_LON = 8.372, 8.58776333
+MIN_LAT, MAX_LAT = 53.4570, 53.71997
 MIN_COG, MAX_COG = 0., 359.9
 MIN_SOG, MAX_SOG = 1e-7, 29.9
 # Define inverse scales
@@ -46,7 +46,9 @@ def geo_distance(p1, p2):
 class AISenv(core.Env):
 
     def __init__(self, dataset='deeprl/envs/trajectories_linear_interpolate.csv', time_interval=5):
+        dataset = 'deeprl/processing/trajectories_aishub_linear.csv'
         # Trajectory ID column 'traj_id'
+        print("loading in ais data...")
         self.df = pd.read_csv(dataset)
         self.num_trajectories = self.df.groupby('traj_id').count().shape[0]
         self.trajectory_list = list(self.df.groupby('traj_id'))
@@ -72,6 +74,12 @@ class AISenv(core.Env):
         # curve that the agent took
         self.agent_traj = None
         self.time_multipler = 5
+      
+    def get_trajectory_count(self):
+        return len(self.trajectory_list)
+    
+    def set_trajectory_index(self, index):
+        self.trajectory_index = index
         
     def __getitem__(self, i):
         return self.episode_df.iloc[i,:].values
@@ -79,9 +87,9 @@ class AISenv(core.Env):
     def reset(self):
         self.step_counter = 0
         self.trajectory_index = self.trajectory_index + 1
-        if self.trajectory_index >= self.num_trajectories:
-            random.shuffle(self.trajectory_list)
-            self.trajectory_index = 0
+       # if self.trajectory_index >= self.num_trajectories:
+        #    random.shuffle(self.trajectory_list)
+       #     self.trajectory_index = 0
         self.episode_df = self.trajectory_list[self.trajectory_index][1]
         self.episode_df = self.episode_df[['lat', 'lon', 'cog', 'sog']]
         self.length_episode = self.episode_df.shape[0] 
@@ -142,7 +150,7 @@ class AISenv(core.Env):
             self.agent_traj = np.concatenate((self.agent_traj, np.array([[lat_pred, lon_pred]])), axis=0)
             self.true_traj = np.concatenate((self.true_traj, np.array([[lat_true, lon_true]])), axis=0)
         else: 
-            reward = self.finish()
+            reward = 0
         # The agent's networks need normalized observations 
         observation = self.scale * (self.state - self.shift)
         return observation, reward, done, {}
@@ -179,41 +187,7 @@ class AISenv(core.Env):
         plt.clf()
         time.sleep(0.01)
         
-    def finish(self, reset_trajectory_index=False):
-        self.step_counter = 0
-        self.episode = 0 if reset_trajectory_index else self.trajectory_index + 1
-        self.episode = self.trajectory_index % self.num_trajectories 
-        self.state = self.shift + self.reset() / self.scale
-        return 0
 
-def run_agent_env_loop(env, agent, random_process, 
-                       num_episodes=None, render=True, self_loop=False, in_sample=False):
-
-    num_episodes = num_episodes if num_episodes else env.num_episodes
-    # Since agent.fit trains on nb_steps, the last training episode may not be finished yet
-    try:
-        if not env.the_end: _ = env.finish(reset_episodes=in_sample) # reset_episodes -> test in-sample
-    except: # when running before calling agent.fit
-        pass
-    # Tag env as non-trainable: states not read from dataset now but from agent predictions
-    env.training = False if self_loop else True
-    # Reset random_process
-    random_process.reset_states()
-    for episode in range(num_episodes):
-        print(f"Episode {episode}/{num_episodes}")
-        observation = env.reset()
-        for t, _ in enumerate(env):
-            action = agent.forward(observation) + random_process.sample()
-            observation, _, done, _ = env.step(action)
-            if done:
-                print(f"Episode finished after {t+1} steps")
-                break
-        if render: env.render()
-        
-
-a = AISenv()
-print(a.num_trajectories)
-    
 register(
     id="ais-v0",
     entry_point="deeprl.envs.ais_env:AISenv",

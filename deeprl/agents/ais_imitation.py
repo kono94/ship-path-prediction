@@ -29,6 +29,7 @@ os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 
 print(torch.cuda.is_available())
 
+TRAIN_SPLIT = 0.7
 
 def set_seed(seed):
     torch.manual_seed(seed)
@@ -44,23 +45,26 @@ class CustomFeedForwardPolicy(sb3.common.policies.ActorCriticPolicy):
         super().__init__(*args, **kwargs, net_arch=net_arch)
 
 
-def policy_in_action(venv, policy, nr_samples, evalution_path):
+def policy_in_action(env, policy, evalution_path):
     df = pd.DataFrame(columns=['id', 'ep_length', 'cum_reward', 'performance'])
-    obs = venv.reset()
+    n_trajs = env.get_trajectory_count()
+    start_index = int(TRAIN_SPLIT * n_trajs) 
+    print(start_index)
+    env.set_trajectory_index(start_index) # +1 with the first reset()
+    obs = env.reset()
     cum_reward = 0
     t = 0
-    for i in tqdm(range(0, nr_samples)):
+    
+    for i in tqdm(range(0, n_trajs - start_index -10)):
         done = False
         while not done:
             action, _ = policy.predict(obs, deterministic=True)
-            print(obs)
-            print(action)
-            obs, reward, done, _ = venv.step(action)
-            cum_reward += reward[0]
+            obs, reward, done, _ = env.step(action)
+            cum_reward += reward
             t += 1
-            venv.render(mode="human")
+            #env.render(mode="human")
         if done:
-            obs = venv.reset()
+            obs = env.reset()
             df = df.append({'id': i+1, 'ep_length': t, 'cum_reward': cum_reward, 'performance': cum_reward/t}, ignore_index=True)
             print(f"'id': {i+1}, 'ep_length': {t}, 'cum_reward': {cum_reward}, 'performance': {cum_reward/t}")
            # print(f'cum:{cum_reward} t:{t}')
@@ -71,9 +75,10 @@ def policy_in_action(venv, policy, nr_samples, evalution_path):
     df.to_csv(evalution_path)
 
 
-def sample_expert_demonstrations(sample_env, expert_samples_path, n_samples):
+def sample_expert_demonstrations(sample_env, expert_samples_path):
     trajectory_list = []
-    for i in tqdm(range(0, n_samples)):
+    n_trajectories = sample_env.get_trajectory_count()
+    for i in tqdm(range(0, int(n_trajectories * TRAIN_SPLIT))):
         sample_env.reset()
         done = False
         obs = []
@@ -87,7 +92,6 @@ def sample_expert_demonstrations(sample_env, expert_samples_path, n_samples):
             done = transition[3]
             #sample_env.render()
 
-        sample_env.finish()
         obs.append(sample_env.next_obs)
         trajectory_list.append(
             Trajectory(np.array(obs), np.array(actions), np.array(infos), terminal=True)
@@ -155,7 +159,7 @@ def train_GAIL(venv, expert_transitions, steps, net_arch, policy_save_path):
     gail_trainer.train(total_timesteps=steps)
     gail_trainer.gen_algo.save(f'{policy_save_path}.zip')
     print(f'{policy_save_path}.zip')
-    print(gail_trainer.gen_algo.predict([0.5, 0.9, 0.5, 0.6]))
+    print(gail_trainer.gen_algo.predict([0.26154423, 0.9519157,  0.32064462, 0.00668896]))
     #th.save(gail_trainer.policy, policy_save_path)
     
 if __name__ == "__main__":
@@ -203,16 +207,20 @@ if __name__ == "__main__":
     if (args.mode == "sample" or args.mode == "train") and args.expert_samples_path == "":
         print("Provide a path to a saved the expert samples --expert_samples_path")
         sys.exit(2)
-        
+    
+  
     if args.mode == "sample":
-        sample_expert_demonstrations(gym.make(args.env), args.expert_samples_path, args.n_samples)
+        sample_expert_demonstrations(gym.make(args.env), args.expert_samples_path)
+        sys.exit(0)
+        
     if args.mode == "train":
-        venv = ut.make_vec_env(args.env, n_envs=1)
         with open(args.expert_samples_path, "rb") as f:
             # This is a list of `imitation.data.types.Trajectory`, where
             # every instance contains observations and actions for a single expert
             # demonstration.
             transitions = pickle.load(f)
+        venv = ut.make_vec_env(args.env, n_envs=1)
+        print(len(transitions))
         if args.algo == "bc":
             train_BC(venv, transitions, args.training_steps, [args.hidden1, args.hidden2], args.policy_path)
         elif args.algo == "gail":
@@ -225,10 +233,10 @@ if __name__ == "__main__":
         if args.policy_path == "":
             print("Provide a path to a saved policy in parameter --policy_path")
             sys.exit(2)
-        venv = ut.make_vec_env(args.env, n_envs=1)
+        env = gym.make(args.env)
         if args.algo == "bc":
-            policy_in_action(venv, bc.reconstruct_policy(args.policy_path), args.n_samples, args.evaluation_path)
+            policy_in_action(env, bc.reconstruct_policy(args.policy_path), args.evaluation_path)
         elif args.algo == "gail":
             policy = sb3.DDPG.load(f'{args.policy_path}.zip') 
            # th.load(f'{args.policy_path}.zip', device='auto')
-            policy_in_action(venv, policy, args.n_samples, args.evaluation_path)
+            policy_in_action(env, policy, args.evaluation_path)
