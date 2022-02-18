@@ -21,6 +21,8 @@ from imitation.rewards import reward_nets
 from imitation.algorithms.adversarial import gail
 from imitation.policies import serialize
 from stable_baselines3.common import base_class
+from imitation.algorithms.dagger import SimpleDAggerTrainer
+
 
 # needs to be imported to register the custom environments
 import deeprl.envs.curve
@@ -58,11 +60,12 @@ def policy_in_action(env, policy, evalution_path):
     for i in tqdm(range(0, n_trajs - start_index -10)):
         done = False
         while not done:
+            
             action, _ = policy.predict(obs, deterministic=True)
             obs, reward, done, _ = env.step(action)
             cum_reward += reward
             t += 1
-            #env.render(mode="human")
+            env.render(mode="human")
         if done:
             obs = env.reset()
             df = df.append({'id': i+1, 'ep_length': t, 'cum_reward': cum_reward, 'performance': cum_reward/t}, ignore_index=True)
@@ -121,7 +124,7 @@ def train_BC(venv, expert_transitions, steps, net_arch, policy_save_path):
     )
     bc_trainer.train(n_epochs=steps)
     bc_trainer.save_policy(policy_save_path)
-
+    
 
 def train_GAIL(venv, expert_transitions, steps, net_arch, policy_save_path):
     """  

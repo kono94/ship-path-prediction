@@ -9,7 +9,7 @@ import time
 
 import deeprl.common.util as util
 from scipy.stats import norm
-
+import collections
 
 class Position:
     def __init__(self, x, y) -> None:
@@ -71,36 +71,36 @@ class CurveBase(gym.Env):
 
         # Curves to be generated
         self.trajectories = {
-            # "circle": {
-            #      "starting_pos": (350, 100),
-            #      "func": lambda t: 0.15 * t,
-            # },
-            # "sinus-small": {
-            #      "starting_pos": (20, 400),
-            #      "func": lambda t: math.sin(t / 1.5) - math.pi / 6,
-            # },
-            # "sinus-big": {
-            #     "starting_pos": (400, 20),
-            #     "func": lambda t: math.sin(t / 2) + math.pi * 0.6,
-            # },
-            # "sinus-ultra": {
-            #     "starting_pos": (10, 10),
-            #     "func": lambda t: math.sin(t / 4) + math.pi / 6,
-            # },
+            #"circle": {
+            #     "starting_pos": (350, 100),
+            #     "func": lambda t: 0.15 * t,
+          #  },
+            "sinus-small": {
+                 "starting_pos": (20, 400),
+                 "func": lambda t: math.sin(t / 1.5) - math.pi / 6,
+            },
+            "sinus-big": {
+                "starting_pos": (400, 20),
+                "func": lambda t: math.sin(t / 2) + math.pi * 0.6,
+            },
+            "sinus-ultra": {
+                "starting_pos": (10, 10),
+                "func": lambda t: math.sin(t / 4) + math.pi / 6,
+            },
         }
         
-        for i in range(5):
-            x = random.randint(19, 37)
-            y = random.randint(7, 15)
-            a = np.random.uniform(3.6, 4.4)
-            b = np.random.uniform(5.7, 6.3)
-            c = np.random.uniform(0.37, 0.43)
-            start = 17
-            finish = start + 19
-            self.trajectories[f'circle{i}'] = {
-                "starting_pos": (x, y),
-                "func": lambda t:math.sin(t / a) + math.pi / b if t < start or t > finish else c * t,
-            }
+        # for i in range(0):
+        #     x = random.randint(19, 37)
+        #     y = random.randint(7, 15)
+        #     a = np.random.uniform(3.6, 4.4)
+        #     b = np.random.uniform(5.7, 6.3)
+        #     c = np.random.uniform(0.37, 0.43)
+        #     start = 17
+        #     finish = start + 19
+        #     self.trajectories[f'circle{i}'] = {
+        #         "starting_pos": (x, y),
+        #         "func": lambda t:math.sin(t / a) + math.pi / b if t < start or t > finish else c * t,
+        #     }
         self.current_generator_curve = None
         self.current_generator_name = None
 
@@ -120,7 +120,8 @@ class CurveBase(gym.Env):
         self.agent_heading = None
         self.agent_speed = None
         self.agent_reward = 0
-
+        # Try out moving average rewards
+        self.recent_rewards = collections.deque(maxlen=10)
         self.master = None
 
     def _reset_starting_pos(self, starting_pos: Tuple[int, int]):
@@ -251,12 +252,13 @@ class CurveBase(gym.Env):
             or self.agent_position.x > self.width
             or self.agent_position.x < 0
             or self.step_count > 1000
-           # or dist_to_path > 50
+            or dist_to_path > 100
         )
 
         if done or reward < 0.001:
             reward = 0
-
+            
+        self.recent_rewards.append(reward)
         self.agent_reward = reward
 
         # clip values to stay in observation space when leaving the world
@@ -265,7 +267,7 @@ class CurveBase(gym.Env):
             np.clip(self.agent_position.y, 0, self.height),
         )
 
-        return self._step_observation(), reward, done, {}
+        return self._step_observation(), self.recent_rewards.mean(), done, {}
 
     def _reset_env(self, deterministic_idx=None):
         self.step_count = 0

@@ -1,3 +1,4 @@
+from turtle import color
 import numpy as np
 from numpy import sin, cos, pi
 from numpy import radians as rad
@@ -13,6 +14,8 @@ import matplotlib.pyplot as plt
 import random
 import sys
 from scipy.stats import norm
+import geopandas
+import contextily as ctx
 
 # State boundaries
 MIN_LON, MAX_LON = 8.372, 8.58776333
@@ -87,9 +90,9 @@ class AISenv(core.Env):
     def reset(self):
         self.step_counter = 0
         self.trajectory_index = self.trajectory_index + 1
-       # if self.trajectory_index >= self.num_trajectories:
-        #    random.shuffle(self.trajectory_list)
-       #     self.trajectory_index = 0
+        if self.trajectory_index >= self.num_trajectories:
+            random.shuffle(self.trajectory_list)
+            self.trajectory_index = 0
         self.episode_df = self.trajectory_list[self.trajectory_index][1]
         self.episode_df = self.episode_df[['lat', 'lon', 'cog', 'sog']]
         self.length_episode = self.episode_df.shape[0] 
@@ -160,6 +163,21 @@ class AISenv(core.Env):
         if self.figure == None:
             plt.ion()
             self.figure = 1
+            west, south, east, north = (
+            8.45,
+            53.45,
+            8.6,
+            53.8
+            )
+            self.ghent_img, self.ghent_ext = ctx.bounds2img(west,
+                                south,
+                                east,
+                                north,
+                                ll=True,
+                                source=ctx.providers.OpenStreetMap.Mapnik
+                            )
+            #plt.figure(figsize=(15,10))
+           
             # pos_history = np.concatenate((self.pos_pred, self.pos_true), axis=0)
             # hist_len = pos_history.shape[0] // 2
             # df_pos = pd.DataFrame(pos_history, columns=['lon', 'lat'])
@@ -177,16 +195,35 @@ class AISenv(core.Env):
             # self.figure.data[1].lat = self.pos_true[:,1]
             # self.figure.data[1].lon = self.pos_true[:,0]
        # self.figure.plotly_update()
-        #plt.scatter(self.agent_traj[:,0], self.agent_traj[:,1])
-        plt.plot(self.agent_traj[:,0], self.agent_traj[:,1])
-        plt.plot(self.true_traj[:,0], self.true_traj[:,1])
-        plt.xlim([MIN_LAT, MAX_LAT])
-        plt.ylim([MIN_LON, MAX_LON])
-        plt.draw()
+        plt.scatter(self.agent_traj[:,0], self.agent_traj[:,1])
+        # plt.plot(self.agent_traj[:,0], self.agent_traj[:,1])
+        plt.plot(self.true_traj[:,1], self.true_traj[:,0], zorder=3, color="orange")
+        plt.plot(self.agent_traj[:,1], self.agent_traj[:,0], zorder=2, color="blue")
+        plt.ylim([53.50, 53.63])
+        plt.xlim([8.48, 8.6])
+        #plt.ylim([MIN_LAT, MAX_LAT])
+       # plt.xlim([MIN_LON,MAX_LON])
+        # # plt.draw()
+        # plt.pause(0.0001)
+        # plt.clf()
+        # time.sleep(0.01)
+        
+        #f, ax = plt.subplots(1, figsize=(9, 9))
+      #  df = pd.DataFrame({'lat': self.agent_traj[:,0], 'lon': self.agent_traj[:,1]})
+      #  gdf = geopandas.GeoDataFrame(
+      #      df, geometry=geopandas.points_from_xy(df.lon ,df.lat))
+
+        #ax.set_xlim(8.4,8.6)
+       # ax.set_ylim(53.4, 53.9)
+ 
+      #  ax = gdf.plot(alpha=0.80, color='#d66058', figsize=(10,10))
+       # ctx.add_basemap(ax, crs="epsg:4326", source=ctx.providers.OpenStreetMap.Mapnik, interpolation="sinc")
+        #plt.plot(self.agent_traj[:,0], self.agent_traj[:,1])
+      #  plt.imshow(self.ghent_img, extent=self.ghent_ext, zorder=1)
+        plt.draw()  
         plt.pause(0.0001)
         plt.clf()
-        time.sleep(0.01)
-        
+        time.sleep(0.08)
 
 register(
     id="ais-v0",
