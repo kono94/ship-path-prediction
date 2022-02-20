@@ -48,8 +48,7 @@ def geo_distance(p1, p2):
 
 class AISenv(core.Env):
 
-    def __init__(self, dataset='deeprl/envs/trajectories_linear_interpolate.csv', time_interval=5):
-        dataset = 'deeprl/processing/trajectories_aishub_linear.csv'
+    def __init__(self, dataset='data/processed/aishub_linear.csv', time_interval=5):
         # Trajectory ID column 'traj_id'
         print("loading in ais data...")
         self.df = pd.read_csv(dataset)

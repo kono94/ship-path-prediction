@@ -47,7 +47,7 @@ class CustomFeedForwardPolicy(sb3.common.policies.ActorCriticPolicy):
         super().__init__(*args, **kwargs, net_arch=net_arch)
 
 
-def policy_in_action(env, policy, evalution_path):
+def policy_in_action(env, policy, evalution_path, render):
     df = pd.DataFrame(columns=['id', 'ep_length', 'cum_reward', 'performance'])
     n_trajs = env.get_trajectory_count()
     start_index = int(TRAIN_SPLIT * n_trajs) 
@@ -65,7 +65,8 @@ def policy_in_action(env, policy, evalution_path):
             obs, reward, done, _ = env.step(action)
             cum_reward += reward
             t += 1
-            env.render(mode="human")
+            if render:
+                env.render(mode="human")
         if done:
             obs = env.reset()
             df = df.append({'id': i+1, 'ep_length': t, 'cum_reward': cum_reward, 'performance': cum_reward/t}, ignore_index=True)
@@ -73,14 +74,17 @@ def policy_in_action(env, policy, evalution_path):
            # print(f'cum:{cum_reward} t:{t}')
             cum_reward = 0
             t = 0
+    
+    
     with open("results.txt", "a") as myfile:
-        myfile.write(f'{df["performance"].mean()} \n')        
+        myfile.write(f'{df["performance"].mean()} \n')      
     df.to_csv(evalution_path)
 
 
 def sample_expert_demonstrations(sample_env, expert_samples_path):
     trajectory_list = []
     n_trajectories = sample_env.get_trajectory_count()
+    print("recording expert trajectories...")
     for i in tqdm(range(0, int(n_trajectories * TRAIN_SPLIT))):
         sample_env.reset()
         done = False
@@ -199,10 +203,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--expert_samples_path", default="curve_expert_trajectory.pickle", type=str, help="expert trajectories files"
     )
-    parser.add_argument("--n_samples", default=30, type=int, help="Number of trajectories to learn and eval on"),
     parser.add_argument(
         "--evaluation_path", default="evaluation.csv", type=str, help="Path to store the evaluation dataframe"
     )
+    parser.add_argument('--render', dest='render', action='store_true')
     args = parser.parse_args()
     #args = Namespace(algo='bc', animation_delay=1.0, env='curve-simple-v0', hidden1=128, hidden2=128, mode='test', policy_path='bc_policy.pth', training_steps=50000)
 
@@ -238,8 +242,8 @@ if __name__ == "__main__":
             sys.exit(2)
         env = gym.make(args.env)
         if args.algo == "bc":
-            policy_in_action(env, bc.reconstruct_policy(args.policy_path), args.evaluation_path)
+            policy_in_action(env, bc.reconstruct_policy(args.policy_path), args.evaluation_path, args.render)
         elif args.algo == "gail":
             policy = sb3.DDPG.load(f'{args.policy_path}.zip') 
            # th.load(f'{args.policy_path}.zip', device='auto')
-            policy_in_action(env, policy, args.evaluation_path)
+            policy_in_action(env, policy, args.evaluation_path, args.render)

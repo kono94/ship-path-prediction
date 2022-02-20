@@ -1,0 +1,5 @@
+outs:
+- md5: a080aec003664f107b2732ccadbc5a42.dir
+  size: 67452
+  nfiles: 8
+  path: performance_summary
