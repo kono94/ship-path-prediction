@@ -3,7 +3,6 @@
 *.pth
 output/
 imitation/
-data/
 *.zip
 /.vscode
 /*.venv

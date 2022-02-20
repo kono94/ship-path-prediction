@@ -1,4 +1,5 @@
 #!/bin/bash
 
-source env/bin/activate
+echo "sourcing into virtualenv; setting PYTHONPATH"
+source .venv/bin/activate
 export PYTHONPATH=$(pwd)
