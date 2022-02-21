@@ -64,6 +64,10 @@ Alternatevly install CMake and GEOS from source.
 
 
 ### Setup DVC remote and pull data
+The remote storage is located on the misa server:
+```bash
+\\misa.intra.dlr.de\MI\AIS\imitation_learning_dvc
+```
 Define a custom dvc remote (mounted NAS):
 ```bash
 dvc remote add nas /path/to/mnt/nas
