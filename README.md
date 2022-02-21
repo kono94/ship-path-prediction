@@ -62,5 +62,28 @@ conda install -c conda-forge proj
 
 Alternatevly install CMake and GEOS from source.
 
-### Usage
 
+### Setup DVC remote and pull data
+Define a custom dvc remote (mounted NAS):
+```bash
+dvc remote add nas /path/to/mnt/nas
+```
+Pull all data or pull specific data (e.g. only single months of AIS data).
+```bash
+dvc pull
+dvc pull data/raw_data/2020_01
+```
+It is also possible to just pull the expert trajectories to just start
+training:
+```bash
+dvc pull data/expert_trajectory/*
+```
+
+### Usage
+Modify `ais_imitation.sh`, e.g. changing algorithm from `bc` to `gail`, amount of neurons or training steps. Comment out commnds to sample expert trajectories (usually done just once)
+or training, enable or disable rendering while testing.
+Then, just run the script from the root folder:
+
+```bash
+./ais_imitation.sh
+```
