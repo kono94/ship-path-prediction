@@ -1,4 +1,5 @@
 import argparse
+from turtle import distance
 import gym
 import pickle
 import random
@@ -22,14 +23,12 @@ from imitation.algorithms.adversarial import gail
 from imitation.policies import serialize
 from stable_baselines3.common import base_class
 from imitation.algorithms.dagger import SimpleDAggerTrainer
-
+from statistics import mean
 
 # needs to be imported to register the custom environments
 import deeprl.envs.curve
 import deeprl.envs.ais_env
 os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
-
-print(torch.cuda.is_available())
 
 TRAIN_SPLIT = 0.7
 
@@ -51,7 +50,6 @@ def policy_in_action(env, policy, evalution_path, render):
     df = pd.DataFrame(columns=['id', 'ep_length', 'cum_reward', 'performance'])
     n_trajs = env.get_trajectory_count()
     start_index = int(TRAIN_SPLIT * n_trajs) 
-    print(start_index)
     env.set_trajectory_index(start_index) # +1 with the first reset()
     obs = env.reset()
     cum_reward = 0
@@ -59,18 +57,19 @@ def policy_in_action(env, policy, evalution_path, render):
     
     for i in tqdm(range(0, n_trajs - start_index -10)):
         done = False
+        distances = []
         while not done:
-            
             action, _ = policy.predict(obs, deterministic=True)
-            obs, reward, done, _ = env.step(action)
+            obs, reward, done, info = env.step(action)
+            distances.append(info['distance_in_meters'])
             cum_reward += reward
             t += 1
             if render:
                 env.render(mode="human")
         if done:
             obs = env.reset()
-            df = df.append({'id': i+1, 'ep_length': t, 'cum_reward': cum_reward, 'performance': cum_reward/t}, ignore_index=True)
-            print(f"'id': {i+1}, 'ep_length': {t}, 'cum_reward': {cum_reward}, 'performance': {cum_reward/t}")
+            df = df.append({'id': i+1, 'ep_length': t, 'cum_reward': cum_reward, 'performance': cum_reward/t, 'distances': distances}, ignore_index=True)
+            print(f"'id': {i+1}, 'ep_length': {t}, 'cum_reward': {cum_reward}, 'performance': {cum_reward/t}'distances': {mean(distances)}")
            # print(f'cum:{cum_reward} t:{t}')
             cum_reward = 0
             t = 0

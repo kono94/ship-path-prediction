@@ -74,13 +74,14 @@ dvc remote add nas /path/to/mnt/nas
 ```
 Pull all data or pull specific data (e.g. only single months of AIS data).
 ```bash
-dvc pull
-dvc pull data/raw_data/2020_01
+dvc pull -r remote
+dvc pull -r rmote data/raw_data/2020_01
 ```
-It is also possible to just pull the expert trajectories to just start
+It is also possible to just pull the expert trajectories and preprocessed AIS data to just start
 training:
 ```bash
-dvc pull data/expert_trajectory/*
+dvc pull -r remote data/processed/*
+dvc pull -r remote data/expert_trajectory/*
 ```
 
 ### Usage

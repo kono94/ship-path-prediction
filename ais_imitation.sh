@@ -2,10 +2,10 @@
 source ./setup.sh
 
 EXPERIMENT_ID=1
-ALGO=gail
+ALGO=bc
 ENV=ais-v0
 N_NEURONS=32
-TRAIN_STEPS=10000
+TRAIN_STEPS=10
 EXPERT_PATH=data/expert_trajectories/$EXPERIMENT_ID-ais_expert_trajectories.pickle
 
 
@@ -24,9 +24,9 @@ do
         EVAL_PATH=$prefix/steps$TRAIN_STEPS#neurons$N_NEURONS#seed$SEED.csv
         ## TRAIN ON EXPERT SAMPLES
 
-        python ./deeprl/scripts/ais_imitation.py --mode train --algo $ALGO --env $ENV \
-                --training_steps $TRAIN_STEPS --hidden1 $N_NEURONS --hidden2 $N_NEURONS \
-                --policy_path $POLICY_SAVE --expert_samples_path $EXPERT_PATH --seed $SEED
+        #python ./deeprl/scripts/ais_imitation.py --mode train --algo $ALGO --env $ENV \
+       #         --training_steps $TRAIN_STEPS --hidden1 $N_NEURONS --hidden2 $N_NEURONS \
+      #          --policy_path $POLICY_SAVE --expert_samples_path $EXPERT_PATH --seed $SEED
 
         ## TEST THE TRAINED POLICY
         python ./deeprl/scripts/ais_imitation.py --mode test --env  $ENV --algo $ALGO --policy_path  $POLICY_SAVE  \

@@ -114,48 +114,45 @@ class AISenv(core.Env):
         return last_obs, np.array([next_obs[2], next_obs[3]]), {}, done
 
     def step(self, action):
-        done = bool(self.step_counter >= self.length_episode-1)
-        if not done:
-            # Read current agent state and agent's action
-            lat_agent = self.agent_traj[int(self.step_counter / self.time_multipler)][0]
-            lon_agent = self.agent_traj[int(self.step_counter / self.time_multipler)][1]
-            #print(f'lat_a: {lat_agent} lon_a: {lon_agent}')
-            cog_a, sog_a = map(lambda x: np.clip(x, 0, 1), action)
-            # The agent's outputs need to be tranformed back to original scale
-            sog_a = MIN_SOG + DSOG * sog_a
-            cog_a = MIN_COG + DCOG * cog_a 
+        # Read current agent state and agent's action
+        lat_agent = self.agent_traj[int(self.step_counter / self.time_multipler)][0]
+        lon_agent = self.agent_traj[int(self.step_counter / self.time_multipler)][1]
+        #print(f'lat_a: {lat_agent} lon_a: {lon_agent}')
+        cog_a, sog_a = map(lambda x: np.clip(x, 0, 1), action)
+        # The agent's outputs need to be tranformed back to original scale
+        sog_a = MIN_SOG + DSOG * sog_a
+        cog_a = MIN_COG + DCOG * cog_a 
 
-            # Agent's suggestion of state update
-            d = distance(kilometers = sog_a * KNOTS_TO_KMH * self.time_interval_secs * self.time_multipler / 3600)
-            p = d.destination(point=geopy.Point(lat_agent, lon_agent), bearing=cog_a)
-            lat_pred = p[0]
-            lon_pred = p[1]
-            # Ensure that predictions are within bounds
-            lat_pred = np.clip(lat_pred, MIN_LAT, MAX_LAT)
-            lon_pred = np.clip(lon_pred, MIN_LON, MAX_LON)
-            cog_pred = np.clip(cog_a, MIN_COG, MAX_COG)
+        # Agent's suggestion of state update
+        d = distance(kilometers = sog_a * KNOTS_TO_KMH * self.time_interval_secs * self.time_multipler / 3600)
+        p = d.destination(point=geopy.Point(lat_agent, lon_agent), bearing=cog_a)
+        lat_pred = p[0]
+        lon_pred = p[1]
+        # Ensure that predictions are within bounds
+        lat_pred = np.clip(lat_pred, MIN_LAT, MAX_LAT)
+        lon_pred = np.clip(lon_pred, MIN_LON, MAX_LON)
 
-            # Compare with observation at next step
-            self.step_counter = np.clip(self.step_counter + 1 * self.time_multipler, 0, self.length_episode - 1)
-            self.state = self[self.step_counter]
-            lat_true, lon_true = self.state[:2]
-            #print(f'TRUE: {self.state[3]} PRED: {sog_a}')
-            # If the agent is self-looping, modify the next state accordingly
-            self.state = self.state if self.training else np.array([lat_pred, lon_pred, cog_pred])
-            # Compute the error based on the path track error
-            geo_dist_meters = geopy.distance.distance((lat_pred, lon_pred), (lat_true, lon_true)).meters
-            reward = norm.pdf(geo_dist_meters, 0, 50) * 125.3315
-            if reward < 0.001:
-                reward = 0
-            #print(geo_dist)
-            # Record predictions and observations of vessel location
-            self.agent_traj = np.concatenate((self.agent_traj, np.array([[lat_pred, lon_pred]])), axis=0)
-            self.true_traj = np.concatenate((self.true_traj, np.array([[lat_true, lon_true]])), axis=0)
-        else: 
+        # Compare with observation at next step
+        self.step_counter = np.clip(self.step_counter + 1 * self.time_multipler, 0, self.length_episode - 1)
+        self.state = self[self.step_counter]
+        lat_true, lon_true = self.state[:2]
+        #print(f'TRUE: {self.state[3]} PRED: {sog_a}')
+        # Compute the error based on the path track error
+        geo_dist_meters = geopy.distance.distance((lat_pred, lon_pred), (lat_true, lon_true)).meters
+        reward = norm.pdf(geo_dist_meters, 0, 50) * 125.3315
+        if reward < 0.001:
             reward = 0
+        #print(geo_dist)
+        # Record predictions and observations of vessel location
+        self.agent_traj = np.concatenate((self.agent_traj, np.array([[lat_pred, lon_pred]])), axis=0)
+        self.true_traj = np.concatenate((self.true_traj, np.array([[lat_true, lon_true]])), axis=0)
+
+        # is the end of trajectory reached?
+        done = bool(self.step_counter >= self.length_episode-1)
+        
         # The agent's networks need normalized observations 
         observation = self.scale * (self.state - self.shift)
-        return observation, reward, done, {}
+        return observation, reward, done, {'distance_in_meters': geo_dist_meters}
     
     def render(self, mode):
         #print(self.pos_pred[:,0])
