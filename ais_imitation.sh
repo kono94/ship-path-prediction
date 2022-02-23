@@ -24,9 +24,9 @@ do
         EVAL_PATH=$prefix/steps$TRAIN_STEPS#neurons$N_NEURONS#seed$SEED.csv
         ## TRAIN ON EXPERT SAMPLES
 
-        #python ./deeprl/scripts/ais_imitation.py --mode train --algo $ALGO --env $ENV \
+       #  python ./deeprl/scripts/ais_imitation.py --mode train --algo $ALGO --env $ENV \
        #         --training_steps $TRAIN_STEPS --hidden1 $N_NEURONS --hidden2 $N_NEURONS \
-      #          --policy_path $POLICY_SAVE --expert_samples_path $EXPERT_PATH --seed $SEED
+       #         --policy_path $POLICY_SAVE --expert_samples_path $EXPERT_PATH --seed $SEED
 
         ## TEST THE TRAINED POLICY
         python ./deeprl/scripts/ais_imitation.py --mode test --env  $ENV --algo $ALGO --policy_path  $POLICY_SAVE  \
