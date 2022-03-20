@@ -8,16 +8,19 @@ from argparse import Namespace
 import numpy as np
 import stable_baselines3 as sb3
 import torch as th
-
+import pandas as pd
 import imitation.util.util as ut
 from imitation.data.types import Trajectory
 from imitation.data import rollout
 from imitation.algorithms import bc
 from imitation.algorithms.adversarial import gail
+from stable_baselines3 import DDPG, TD3, SAC
+from stable_baselines3.common.noise import NormalActionNoise, OrnsteinUhlenbeckActionNoise
+from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 
 # needs to be imported to register the custom environments
 import deeprl.envs.curve
-
+import time
 def set_seed(seed):
     torch.manual_seed(seed)
     # most crucial (and hidden) to shuffle deterministically
@@ -33,15 +36,27 @@ class CustomFeedForwardPolicy(sb3.common.policies.ActorCriticPolicy):
         super().__init__(*args, **kwargs, net_arch=net_arch)
 
 
-def policy_in_action(venv, policy):
-    obs = venv.reset()
-    while True:
-        action, _ = policy.predict(obs, deterministic=True)
-        obs, _, dones, _ = venv.step(action)
-        venv.render(False)
-        if dones:
-            obs = venv.reset()
-
+def policy_in_action(venv, policy, evaluation_path):
+    df = pd.DataFrame(columns=['id', 'timestep', 'distance'])
+    for i in range(0, len(venv.trajectories)):
+        obs = venv.reset_deterministically(i)
+        distances = []
+        done = False
+        t = 0
+        while not done:
+            action, _ = policy.predict(obs, deterministic=True)
+            obs, _, done, info = venv.step(action, evaluate=True)  
+            dist = info['distance']
+            name = info['name']
+            dtw = info["dtw"]
+            distances.append(dist)
+            venv.render(False)
+            df = df.append({'id': i, 'name': name, 'timestep': t, 'distance': dist, 'dtw':dtw}, ignore_index=True)
+            t += 1
+            if done:
+               # time.sleep(20)
+                obs = venv.reset()
+        df.to_csv(evaluation_path + ".csv", index=False)
 
 def sample_expert_demonstrations(sample_env):
     trajectory_list = []
@@ -57,21 +72,22 @@ def sample_expert_demonstrations(sample_env):
             actions.append(transition[1])
             infos.append(transition[2])
             done = transition[3]
-            sample_env.render(True)
+            #sample_env.render(True)
         obs.append(sample_env.final_obs)
         trajectory_list.append(
             Trajectory(np.array(obs), np.array(actions), np.array(infos), terminal=True)
         )
-        
-    #with open("curve_expert_trajectory.pickle", "wb") as handle:
-   #     pickle.dump(trajectory_list, handle)
-
-  #  with open("curve_expert_trajectory.pickle", "rb") as f:
-        # This is a list of `imitation.data.types.Trajectory`, where
-        # every instance contains observations and actions for a single expert
-        # demonstration.
-    #    trajectories = pickle.load(f)
     return rollout.flatten_trajectories(trajectory_list)
+
+def train_DDPG(venv, seed, steps, net_arch, policy_save_path):
+    n_actions = venv.action_space.shape[-1]
+    action_noise = OrnsteinUhlenbeckActionNoise(mean=np.ones(n_actions), sigma=0.05 * np.ones(n_actions))
+
+    policy_kwargs = dict(net_arch=dict(pi=net_arch, qf=net_arch))
+
+    model = DDPG("MlpPolicy", venv, action_noise=action_noise, buffer_size= 50000, verbose=1, seed=seed, gamma=0.999, tau=1e-3, learning_rate=1e-4, batch_size=128, policy_kwargs=policy_kwargs)
+    model.learn(total_timesteps=steps, log_interval=1)
+    model.save(policy_save_path)
 
 
 def train_BC(venv, expert_transitions, steps, net_arch, policy_save_path):
@@ -86,7 +102,7 @@ def train_BC(venv, expert_transitions, steps, net_arch, policy_save_path):
             observation_space=venv.observation_space,
             action_space=venv.action_space,
             net_arch=net_arch,
-            lr_schedule=bc.ConstantLRSchedule(th.finfo(th.float32).max),
+            lr_schedule=bc.ConstantLRSchedule(lr=1e-4),
         ),
     )
     bc_trainer.train(n_epochs=steps)
@@ -151,26 +167,35 @@ if __name__ == "__main__":
     parser.add_argument(
         "--policy_path", default="policy.pth", type=str, help="Load policy and visual in env"
     )
+    parser.add_argument(
+        "--evaluation_path", default="evaluation.csv", type=str, help="Path to store the evaluation dataframe"
+    )
 
     args = parser.parse_args()
-    #args = Namespace(algo='bc', animation_delay=1.0, env='curve-simple-v0', hidden1=128, hidden2=128, mode='test', policy_path='bc_policy.pth', training_steps=50000)
-
     set_seed(args.seed)
     
     if args.mode == "train":
         venv = ut.make_vec_env(args.env, n_envs=1)
-        transitions = sample_expert_demonstrations(gym.make(args.env))
-        if args.algo == "bc":
+        
+        if args.algo == "ddpg":
+            train_DDPG(venv, args.seed, args.training_steps, [args.hidden1, args.hidden2], args.policy_path)
+        elif args.algo == "bc":
+            transitions = sample_expert_demonstrations(gym.make(args.env))
             train_BC(venv, transitions, args.training_steps, [args.hidden1, args.hidden2], args.policy_path)
         elif args.algo == "gail":
+            transitions = sample_expert_demonstrations(gym.make(args.env))
             train_GAIL(venv, transitions, args.training_steps, [args.hidden1, args.hidden2], args.policy_path)
         else:
             print("Unknown algorithm")
             sys.exit(2)
-        pass
+
     elif args.mode == "test":
         if args.policy_path == "":
             print("Provide a path to a saved policy in parameter --policy_path")
             sys.exit(2)
-        venv = ut.make_vec_env(args.env, n_envs=1, env_make_kwargs={'animation_delay': args.animation_delay})
-        policy_in_action(venv, bc.reconstruct_policy(args.policy_path))
+        
+        venv = gym.make(args.env, animation_delay=args.animation_delay)
+        if args.algo == "ddpg":
+            policy_in_action(venv, DDPG.load(args.policy_path, env=venv), args.evaluation_path)
+        elif args.algo == "bc":
+            policy_in_action(venv, bc.reconstruct_policy(args.policy_path), args.evaluation_path)

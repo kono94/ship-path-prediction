@@ -1,9 +1,16 @@
 #!/bin/bash
 source ./setup.sh
 
-python ./deeprl/scripts/curve_imitation.py --mode test --env curve-heading-speed-v0 --policy_path  bc_policy_heading_speed_circle_512_512.pth --animation_delay 0.15
+SEEDS=(5 6 7 8 9)
 
-#python ./deeprl/scripts/curve_imitation.py --mode train --algo bc --env curve-heading-speed-v0 \
-        --training_steps 100000 --hidden1 512 --hidden2 512 \
-        --policy_path bc_policy_heading_speed_circle_512_512.pth --seed 5
+for i in "${SEEDS[@]}"
+do
+        SEED=$i
+        PREFIX=ddpg_S4_A2_R3#$SEED
 
+        python ./deeprl/scripts/curve_imitation.py --mode train --algo ddpg --env curve-heading-speed-distance-v0 \
+        --training_steps 30000 --hidden1 400 --hidden2 300 \
+        --policy_path $PREFIX.pth  --seed $SEED
+
+        python ./deeprl/scripts/curve_imitation.py --mode test --algo ddpg --env curve-heading-speed-distance-v0 --policy_path  $PREFIX.pth --animation_delay 0.1 --evaluation_path $PREFIX
+done

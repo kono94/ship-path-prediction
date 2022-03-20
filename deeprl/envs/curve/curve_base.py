@@ -1,7 +1,11 @@
+from re import A
 from tkinter.constants import N
+from turtle import distance
 from typing import Tuple
 import gym
 import numpy as np
+from dtaidistance import dtw_ndim
+from statistics import mean
 
 import random
 import math
@@ -22,6 +26,13 @@ class Position:
             tuples.append((elem.x, elem.y))
 
         return tuples
+    
+    def to_2dim_array(positions):
+        l = list()
+        for i, elem in enumerate(positions):
+            l.append(np.array([elem.x, elem.y]))
+        
+        return np.asarray(l)
 
 
 class CurveBase(gym.Env):
@@ -55,6 +66,7 @@ class CurveBase(gym.Env):
             1: {"name": "y position", "min": 0, "max": self.height},
             2: {"name": "heading / angle", "min": -math.pi, "max": math.pi},
             3: {"name": "current speed", "min": self.min_speed, "max": self.max_speed},
+            4: {"name": "distance", "min": 0, "max": 600},
         }
 
         self.ACTION_DEFINITION_SET = {
@@ -75,17 +87,17 @@ class CurveBase(gym.Env):
             #     "starting_pos": (350, 100),
             #     "func": lambda t: 0.15 * t,
           #  },
-            "sinus-small": {
+            "curve_A": {
+               "starting_pos": (10, 10),
+               "func": lambda t: math.sin(t / 4) + math.pi / 6,
+            },
+           "curve_B": {
+               "starting_pos": (400, 20),
+               "func": lambda t: math.sin(t / 2) + math.pi * 0.6,
+            },
+            "curve_C": {
                  "starting_pos": (20, 400),
                  "func": lambda t: math.sin(t / 1.5) - math.pi / 6,
-            },
-            "sinus-big": {
-                "starting_pos": (400, 20),
-                "func": lambda t: math.sin(t / 2) + math.pi * 0.6,
-            },
-            "sinus-ultra": {
-                "starting_pos": (10, 10),
-                "func": lambda t: math.sin(t / 4) + math.pi / 6,
             },
         }
         
@@ -123,13 +135,16 @@ class CurveBase(gym.Env):
         # Try out moving average rewards
         self.recent_rewards = collections.deque(maxlen=10)
         self.master = None
+        self.sum_reward = 0
+        self.distance = 0
 
     def _reset_starting_pos(self, starting_pos: Tuple[int, int]):
         x = starting_pos[0]
         y = starting_pos[1]
         pos = Position(x, y)
-        self.true_traj = [pos, pos]
-        self.agent_traj = [pos, pos]
+        print(pos)
+        self.true_traj = [pos]
+        self.agent_traj = [pos]
         self.agent_position = pos
         self.position = pos
 
@@ -215,12 +230,13 @@ class CurveBase(gym.Env):
         return self.speed
 
     def _calculate_reward(self, dist_to_path):
-        return norm.pdf(dist_to_path, 0, 5) * 12.5331  # scale amplitude to 1
+        return max(1- (dist_to_path / 100), 0)
+        #return norm.pdf(dist_to_path, 0, 5) * 12.5331  # scale amplitude to 1
 
     def _step_observation(self):
         raise NotImplementedError
 
-    def step(self, action, expert=False):
+    def step(self, action, evaluate=False):
         self.step_count += 1
         self.current_action = self._denormalize_action(action)
 
@@ -245,21 +261,30 @@ class CurveBase(gym.Env):
             + (self.agent_position.y - self.position.y) ** 2
         )
         reward = self._calculate_reward(dist_to_path)
-
-        done = (
-            self.agent_position.y > self.height
-            or self.agent_position.y < 0
-            or self.agent_position.x > self.width
-            or self.agent_position.x < 0
-            or self.step_count > 1000
-            or dist_to_path > 100
-        )
+        self.sum_reward += reward
+        if not evaluate:
+            done = (
+                self.agent_position.y > self.height
+                or self.agent_position.y < 0
+                or self.agent_position.x > self.width
+                or self.agent_position.x < 0
+                or self.step_count > 100
+                or (evaluate and dist_to_path > 100)
+            )
+        else:
+            done = (
+                self.position.y > self.height
+                or self.position.y < 0
+                or self.position.x > self.width
+                or self.position.x < 0
+            )
 
         if done or reward < 0.001:
             reward = 0
             
         self.recent_rewards.append(reward)
         self.agent_reward = reward
+        self.distance = dist_to_path
 
         # clip values to stay in observation space when leaving the world
         self.agent_position = Position(
@@ -267,9 +292,16 @@ class CurveBase(gym.Env):
             np.clip(self.agent_position.y, 0, self.height),
         )
 
-        return self._step_observation(), self.recent_rewards.mean(), done, {}
+        if evaluate:
+            dtw_distance = dtw_ndim.distance(Position.to_2dim_array(self.agent_traj), Position.to_2dim_array( self.true_traj))
+            info = {'distance':dist_to_path, 'dtw':dtw_distance, 'name': self.current_generator_name}
+        else:
+            info = {}
+
+        return self._step_observation(), reward, done, info
 
     def _reset_env(self, deterministic_idx=None):
+        self.deterministic_idx = deterministic_idx
         self.step_count = 0
         self.rng = np.random.default_rng(self._rng_seed)
         self.current_generator_name, current_generator = (
@@ -286,7 +318,8 @@ class CurveBase(gym.Env):
         
         self.agent_heading = self.heading
         self.agent_speed = self.speed
-        
+        self.recent_rewards = collections.deque(maxlen=10)
+
         self._reset_starting_pos(current_generator["starting_pos"])
 
     def _reset(self):
@@ -309,47 +342,53 @@ class CurveBase(gym.Env):
         true_traj_tuples = Position.to_tuples(self.true_traj)
         agent_traj_tuples = Position.to_tuples(self.agent_traj)
         self.canvas.delete("all")
-
-        if not sampling:
-            self.canvas.create_line(agent_traj_tuples, width=2, fill="red")
-            self.canvas.create_oval(
-                self._generate_circle_coords(*agent_traj_tuples[-1], r=3), fill="red"
-            )
-            self.canvas.create_text(
-                400,
-                20,
-                fill="red",
-                font="Times 10",
-                text=f"[{agent_traj_tuples[-1][0]}, {agent_traj_tuples[-1][1]}] speed: {round(self.agent_speed)} heading: {round(self.agent_heading, 3)}",
-                anchor=tk.NW,
-            )
-            self.canvas.create_text(
-                500,
-                40,
-                fill="black",
-                font="Times 10",
-                text=f"reward: {round(self.agent_reward, 3)}",
-                anchor=tk.NW,
-            )
-            self.canvas.create_text(
-                400,
-                100,
-                fill="black",
-                font="Times 10",
-                text=f"Trajectory: {self.current_generator_name}",
-            )
+        self.canvas.create_line(agent_traj_tuples, width=3, fill="black")
+        # if not sampling:
+        #     self.canvas.create_line(agent_traj_tuples, width=2, fill="black")
+        #     self.canvas.create_oval(
+        #         self._generate_circle_coords(*agent_traj_tuples[-1], r=3), fill="red"
+        #     )
+        #     self.canvas.create_text(
+        #         400,
+        #         20,
+        #         fill="red",
+        #         font="Times 10",
+        #         text=f"[{agent_traj_tuples[-1][0]}, {agent_traj_tuples[-1][1]}] speed: {round(self.agent_speed)} heading: {round(self.agent_heading, 3)}",
+        #         anchor=tk.NW,
+        #     )
+        #     self.canvas.create_text(
+        #         500,
+        #         40,
+        #         fill="black",
+        #         font="Times 10",
+        #         text=f"reward: {round(self.agent_reward, 3)}",
+        #         anchor=tk.NW,
+        #     )
+        #     self.canvas.create_text(
+        #         400,
+        #         100,
+        #         fill="black",
+        #         font="Times 10",
+        #         text=f"Trajectory: {self.current_generator_name}",
+        #     )
+        # else:
+        #     self.canvas.create_text(
+        #         400,
+        #         100,
+        #         fill="black",
+        #         font="Times 10",
+        #         text=f"CURRENTLY SAMPING EXPERT TRAJECTORY FOR: \n {self.current_generator_name}",
+        #     )
+        if self.deterministic_idx == 0:
+            color = "red"
+        elif self.deterministic_idx == 1:
+            color = "blue"
         else:
-            self.canvas.create_text(
-                400,
-                100,
-                fill="black",
-                font="Times 10",
-                text=f"CURRENTLY SAMPING EXPERT TRAJECTORY FOR: \n {self.current_generator_name}",
-            )
+            color = "green"
 
-        self.canvas.create_line(true_traj_tuples, width=2, fill="black")
+        self.canvas.create_line(true_traj_tuples, width=3, fill=color)
         self.canvas.create_oval(
-            self._generate_circle_coords(*true_traj_tuples[-1], r=2), fill="black"
+            self._generate_circle_coords(*true_traj_tuples[-1], r=0), fill=color
         )
         self.master.update()
         time.sleep(self.animation_delay)
@@ -363,3 +402,5 @@ class CurveBase(gym.Env):
         x1 = x + r
         y1 = y + r
         return x0, y0, x1, y1
+
+

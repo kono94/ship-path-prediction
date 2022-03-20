@@ -12,7 +12,7 @@ class CurveWithHeading(CurveBase):
     and a just one dimensional action space;
     action := (heading)
     
-    Speed is constant
+    Speed is given by the environment
     """
     
     def __init__(self, animation_delay=0.1):

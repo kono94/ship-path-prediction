@@ -113,6 +113,7 @@ def train_BC(venv, expert_transitions, steps, net_arch, policy_save_path):
     """
     Train BC on expert data.
     """
+    print(th.finfo(th.float32).max)
     bc_trainer = bc.BC(
         observation_space=venv.observation_space,
         action_space=venv.action_space,
@@ -122,7 +123,7 @@ def train_BC(venv, expert_transitions, steps, net_arch, policy_save_path):
             observation_space=venv.observation_space,
             action_space=venv.action_space,
             net_arch=net_arch,
-            lr_schedule=bc.ConstantLRSchedule(th.finfo(th.float32).max),
+            lr_schedule=bc.ConstantLRSchedule(lr=1e-4),
         )
     )
     bc_trainer.train(n_epochs=steps)
@@ -147,16 +148,8 @@ def train_GAIL(venv, expert_transitions, steps, net_arch, policy_save_path):
         venv=venv,
         demonstrations=expert_transitions,
         demo_batch_size=64,
-        gen_algo=sb3.DDPG(
-            "MlpPolicy",
-            #sb3.common.policies.ActorCriticPolicy,
-            env=venv,
-            action_noise=action_noise,
-            verbose=1,
-            batch_size=64,
-            #n_epochs=3,
-            policy_kwargs=policy_kwargs,
-        ),
+        gen_algo=sb3.PPO("MlpPolicy", venv, verbose=1, n_steps=1024),
+       
         reward_net=gail_reward_net,
         # gen_algo=sb3.DDPG("MlpPolicy", venv, verbose=1),
         allow_variable_horizon=True,
@@ -243,6 +236,6 @@ if __name__ == "__main__":
         if args.algo == "bc":
             policy_in_action(env, bc.reconstruct_policy(args.policy_path), args.evaluation_path, args.render)
         elif args.algo == "gail":
-            policy = sb3.DDPG.load(f'{args.policy_path}.zip') 
+            policy = sb3.PPO.load(f'{args.policy_path}.zip') 
            # th.load(f'{args.policy_path}.zip', device='auto')
             policy_in_action(env, policy, args.evaluation_path, args.render)

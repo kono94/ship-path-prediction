@@ -5,7 +5,7 @@ EXPERIMENT_ID=1
 ALGO=bc
 ENV=ais-v0
 N_NEURONS=32
-TRAIN_STEPS=10
+TRAIN_STEPS=20
 EXPERT_PATH=data/expert_trajectories/$EXPERIMENT_ID-ais_expert_trajectories.pickle
 
 
@@ -13,7 +13,7 @@ EXPERT_PATH=data/expert_trajectories/$EXPERIMENT_ID-ais_expert_trajectories.pick
 #python ./deeprl/scripts/ais_imitation.py --mode sample --expert_samples_path $EXPERT_PATH
 
 #6 7 8 9
-SEEDS=(5 6 7 8 9)
+SEEDS=(5)
 for i in "${SEEDS[@]}"
 do
         SEED=$i
@@ -24,13 +24,13 @@ do
         EVAL_PATH=$prefix/steps$TRAIN_STEPS#neurons$N_NEURONS#seed$SEED.csv
         ## TRAIN ON EXPERT SAMPLES
 
-       #  python ./deeprl/scripts/ais_imitation.py --mode train --algo $ALGO --env $ENV \
-       #         --training_steps $TRAIN_STEPS --hidden1 $N_NEURONS --hidden2 $N_NEURONS \
-       #         --policy_path $POLICY_SAVE --expert_samples_path $EXPERT_PATH --seed $SEED
+       # python ./deeprl/scripts/ais_imitation.py --mode train --algo $ALGO --env $ENV \
+        #        --training_steps $TRAIN_STEPS --hidden1 $N_NEURONS --hidden2 $N_NEURONS \
+         #      --policy_path $POLICY_SAVE --expert_samples_path $EXPERT_PATH --seed $SEED
 
         ## TEST THE TRAINED POLICY
         python ./deeprl/scripts/ais_imitation.py --mode test --env  $ENV --algo $ALGO --policy_path  $POLICY_SAVE  \
-                        --animation_delay 0.15 --evaluation_path $EVAL_PATH #--render
+                        --animation_delay 0.15 --evaluation_path $EVAL_PATH --render
 
 
 done

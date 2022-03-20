@@ -15,7 +15,7 @@ import random
 import sys
 from scipy.stats import norm
 import geopandas
-import contextily as ctx
+#import contextily as ctx
 
 # State boundaries
 MIN_LON, MAX_LON = 8.372, 8.58776333
@@ -48,7 +48,7 @@ def geo_distance(p1, p2):
 
 class AISenv(core.Env):
 
-    def __init__(self, dataset='data/processed/aishub_linear.csv', time_interval=5):
+    def __init__(self, dataset='data/processed/aishub_linear_artificial.csv', time_interval=5):
         # Trajectory ID column 'traj_id'
         print("loading in ais data...")
         self.df = pd.read_csv(dataset)
@@ -57,8 +57,8 @@ class AISenv(core.Env):
         self.time_interval_secs = time_interval
         
         # Observations: lon, lat, cog, sog, dt
-        low = np.array([MIN_LAT, MIN_LON, MIN_COG, MIN_SOG], dtype=np.float32)
-        high = np.array([MAX_LAT, MAX_LON, MAX_COG, MAX_SOG], dtype=np.float32)
+        low = np.array([MIN_LON, MIN_LAT, MIN_COG, MIN_SOG], dtype=np.float32)
+        high = np.array([MAX_LON, MAX_LAT,  MAX_COG, MAX_SOG], dtype=np.float32)
         self.observation_space = spaces.Box(low=low, high=high, dtype=np.float32)
         # Actions: cog, sog
         low = np.array([MIN_COG, MIN_SOG], dtype=np.float32)
@@ -66,8 +66,12 @@ class AISenv(core.Env):
         self.action_space = spaces.Box(low=low, high=high)
         # Custom variables
         self.step_counter = 0
-        self.scale = np.array([1/DLAT, 1/DLON, 1/DCOG, 1/DSOG])
-        self.shift = np.array([MIN_LAT, MIN_LON, MIN_COG, MIN_SOG])
+        self.scale = np.array([1/DLON, 1/DLAT, 1/DCOG, 1/DSOG])
+        self.shift = np.array([MIN_LON, MIN_LAT, MIN_COG, MIN_SOG])
+
+        self.scale_action = np.array([1/DCOG, 1/DSOG])
+        self.shift_action = np.array([MIN_COG, MIN_SOG])
+
         self.training = True
         self.trajectory_index = 0
         self.figure = None
@@ -86,6 +90,10 @@ class AISenv(core.Env):
     def __getitem__(self, i):
         return self.episode_df.iloc[i,:].values
 
+    def _scale_action(self, action):
+        return self.scale_action * (action - self.shift_action)
+
+
     def reset(self):
         self.step_counter = 0
         self.trajectory_index = self.trajectory_index + 1
@@ -93,20 +101,22 @@ class AISenv(core.Env):
             random.shuffle(self.trajectory_list)
             self.trajectory_index = 0
         self.episode_df = self.trajectory_list[self.trajectory_index][1]
-        self.episode_df = self.episode_df[['lat', 'lon', 'cog', 'sog']]
+        self.episode_df = self.episode_df[['lon', 'lat', 'direction', 'speed']]
         self.length_episode = self.episode_df.shape[0] 
         self.state = self[0]
         #print(f'state {self.state}')
         self.true_traj = np.expand_dims(self.state[:2],0)
         self.agent_traj = np.expand_dims(self.state[:2],0)
-        return self.scale * (self.state - self.shift)
+        #return self.scale * (self.state - self.shift)
+        return self.state
     
     def step_expert(self):
         last_obs = self.scale * (self.state - self.shift)
-        self.step_counter = np.clip(self.step_counter + 1 * self.time_multipler, 0, self.length_episode - 1)
+        last_obs = self.state
+        self.step_counter = np.clip(self.step_counter + self.time_multipler, 0, self.length_episode - 1)
         self.state = self[self.step_counter]
         next_obs = self.scale * (self.state - self.shift)
-
+        next_obs = self.state
         done = bool(self.step_counter >= self.length_episode-1)
         self.true_traj = np.concatenate((self.true_traj, np.array([[self.state[0], self.state[1]]])), axis=0)
         self.next_obs = next_obs
@@ -115,27 +125,29 @@ class AISenv(core.Env):
 
     def step(self, action):
         # Read current agent state and agent's action
-        lat_agent = self.agent_traj[int(self.step_counter / self.time_multipler)][0]
-        lon_agent = self.agent_traj[int(self.step_counter / self.time_multipler)][1]
+        lon_agent = self.agent_traj[int(self.step_counter / self.time_multipler)][0]
+        lat_agent = self.agent_traj[int(self.step_counter / self.time_multipler)][1]
         #print(f'lat_a: {lat_agent} lon_a: {lon_agent}')
-        cog_a, sog_a = map(lambda x: np.clip(x, 0, 1), action)
+        #cog_a, sog_a = map(lambda x: np.clip(x, 0, 1), action)
         # The agent's outputs need to be tranformed back to original scale
-        sog_a = MIN_SOG + DSOG * sog_a
-        cog_a = MIN_COG + DCOG * cog_a 
-
+        #cog_a = MIN_COG + DCOG * cog_a 
+        #sog_a = MIN_SOG + DSOG * sog_a
+        cog_a = action[0]
+        sog_a = action[1]
         # Agent's suggestion of state update
-        d = distance(kilometers = sog_a * KNOTS_TO_KMH * self.time_interval_secs * self.time_multipler / 3600)
-        p = d.destination(point=geopy.Point(lat_agent, lon_agent), bearing=cog_a)
+        #d = distance(kilometers = sog_a * KNOTS_TO_KMH * self.time_interval_secs * self.time_multipler / 3600)
+        d = distance(meters=sog_a * self.time_interval_secs * self.time_multipler)
+        p = d.destination(point=geopy.Point(latitude=lat_agent, longitude=lon_agent), bearing=cog_a)
         lat_pred = p[0]
         lon_pred = p[1]
         # Ensure that predictions are within bounds
-        lat_pred = np.clip(lat_pred, MIN_LAT, MAX_LAT)
         lon_pred = np.clip(lon_pred, MIN_LON, MAX_LON)
+        lat_pred = np.clip(lat_pred, MIN_LAT, MAX_LAT)
 
         # Compare with observation at next step
-        self.step_counter = np.clip(self.step_counter + 1 * self.time_multipler, 0, self.length_episode - 1)
+        self.step_counter = np.clip(self.step_counter + self.time_multipler, 0, self.length_episode - 1)
         self.state = self[self.step_counter]
-        lat_true, lon_true = self.state[:2]
+        lon_true, lat_true = self.state[:2]
         #print(f'TRUE: {self.state[3]} PRED: {sog_a}')
         # Compute the error based on the path track error
         geo_dist_meters = geopy.distance.distance((lat_pred, lon_pred), (lat_true, lon_true)).meters
@@ -144,14 +156,16 @@ class AISenv(core.Env):
             reward = 0
         #print(geo_dist)
         # Record predictions and observations of vessel location
-        self.agent_traj = np.concatenate((self.agent_traj, np.array([[lat_pred, lon_pred]])), axis=0)
-        self.true_traj = np.concatenate((self.true_traj, np.array([[lat_true, lon_true]])), axis=0)
+        self.agent_traj = np.concatenate((self.agent_traj, np.array([[lon_pred, lat_pred]])), axis=0)
+        self.true_traj = np.concatenate((self.true_traj, np.array([[lon_true, lat_true]])), axis=0)
 
         # is the end of trajectory reached?
         done = bool(self.step_counter >= self.length_episode-1)
         
         # The agent's networks need normalized observations 
         observation = self.scale * (self.state - self.shift)
+        #observation = self.scale * (np.array([lon_pred, lat_pred, cog_a, sog_a]) - self.shift)
+        observation = np.array([lon_pred, lat_pred, cog_a, sog_a])
         return observation, reward, done, {'distance_in_meters': geo_dist_meters}
     
     def render(self, mode):
@@ -165,13 +179,13 @@ class AISenv(core.Env):
             8.6,
             53.8
             )
-            self.ghent_img, self.ghent_ext = ctx.bounds2img(west,
-                                south,
-                                east,
-                                north,
-                                ll=True,
-                                source=ctx.providers.OpenStreetMap.Mapnik
-                            )
+          #  self.ghent_img, self.ghent_ext = ctx.bounds2img(west,
+           #                     south,
+            #                    east,
+             #                   north,
+              #                  ll=True,
+               #                 source=ctx.providers.OpenStreetMap.Mapnik
+                #            )
             #plt.figure(figsize=(15,10))
            
             # pos_history = np.concatenate((self.pos_pred, self.pos_true), axis=0)
@@ -191,10 +205,10 @@ class AISenv(core.Env):
             # self.figure.data[1].lat = self.pos_true[:,1]
             # self.figure.data[1].lon = self.pos_true[:,0]
        # self.figure.plotly_update()
-        plt.scatter(self.agent_traj[:,0], self.agent_traj[:,1])
+       # plt.scatter(self.agent_traj[:,0], self.agent_traj[:,1])
         # plt.plot(self.agent_traj[:,0], self.agent_traj[:,1])
-        plt.plot(self.true_traj[:,1], self.true_traj[:,0], zorder=3, color="orange")
-        plt.plot(self.agent_traj[:,1], self.agent_traj[:,0], zorder=2, color="blue")
+        plt.plot(self.true_traj[:,0], self.true_traj[:,1], zorder=3, color="blue")
+        plt.plot(self.agent_traj[:,0], self.agent_traj[:,1], zorder=2, color="orange")
         plt.ylim([53.50, 53.63])
         plt.xlim([8.48, 8.6])
         #plt.ylim([MIN_LAT, MAX_LAT])
