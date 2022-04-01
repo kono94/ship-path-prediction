@@ -3,9 +3,9 @@ import seaborn as sns
 
 plt.rc('font', family='Helvetica')
 sns.set_style("whitegrid")
-SMALL_SIZE = 20
+SMALL_SIZE = 25
 MEDIUM_SIZE = 25
-BIGGER_SIZE = 30
+BIGGER_SIZE = 25
 
 plt.rc('font', size=SMALL_SIZE)          # controls default text sizes
 plt.rc('axes', titlesize=SMALL_SIZE)     # fontsize of the axes title

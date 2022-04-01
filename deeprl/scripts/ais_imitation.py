@@ -29,7 +29,7 @@ from statistics import mean
 import deeprl.envs.curve
 import deeprl.envs.ais_env
 os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
-
+print(torch.cuda.is_available())
 TRAIN_SPLIT = 0.7
 
 def set_seed(seed):
@@ -47,6 +47,7 @@ class CustomFeedForwardPolicy(sb3.common.policies.ActorCriticPolicy):
 
 
 def policy_in_action(env, policy, evalution_path, render):
+    print(policy)
     df = pd.DataFrame(columns=['id', 'ep_length', 'cum_reward', 'performance'])
     n_trajs = env.get_trajectory_count()
     start_index = int(TRAIN_SPLIT * n_trajs) 
@@ -56,6 +57,7 @@ def policy_in_action(env, policy, evalution_path, render):
     t = 0
     
     for i in tqdm(range(0, n_trajs - start_index -10)):
+    #for i in tqdm(range(0, int(n_trajs * TRAIN_SPLIT))):
         done = False
         distances = []
         while not done:
@@ -66,13 +68,19 @@ def policy_in_action(env, policy, evalution_path, render):
             t += 1
             if render:
                 env.render(mode="human")
-        if done:
-            obs = env.reset()
-            df = df.append({'id': i+1, 'ep_length': t, 'cum_reward': cum_reward, 'performance': cum_reward/t, 'distances': distances}, ignore_index=True)
-            print(f"'id': {i+1}, 'ep_length': {t}, 'cum_reward': {cum_reward}, 'performance': {cum_reward/t}'distances': {mean(distances)}")
-           # print(f'cum:{cum_reward} t:{t}')
-            cum_reward = 0
-            t = 0
+            
+        #if mean(distances) < 200 and t > 100:
+        #    np.save("deeprl/scripts/agent.npy", env.agent_traj)
+       #     np.save("deeprl/scripts/true.npy", env.true_traj)
+      #      sys.exit(1)
+        obs = env.reset()
+        df = df.append({'id': i+1, 'ep_length': t, 'cum_reward': cum_reward, 'performance': cum_reward/t, 'distances': distances}, ignore_index=True)
+        #print(f"'id': {i+1}, 'ep_length': {t}, 'cum_reward': {cum_reward}, 'performance': {cum_reward/t}'distances': {mean(distances)}")
+        # print(f'cum:{cum_reward} t:{t}')
+
+            
+        cum_reward = 0
+        t = 0
     
     
     with open("results.txt", "a") as myfile:
@@ -96,12 +104,14 @@ def sample_expert_demonstrations(sample_env, expert_samples_path):
             actions.append(transition[1])
             infos.append(transition[2])
             done = transition[3]
-            #sample_env.render()
+            #sample_env.render(mode="human")
 
         obs.append(sample_env.next_obs)
+        
         trajectory_list.append(
             Trajectory(np.array(obs), np.array(actions), np.array(infos), terminal=True)
         )
+
         
     with open(expert_samples_path, "wb") as handle:
        pickle.dump(rollout.flatten_trajectories(trajectory_list), handle)
@@ -113,16 +123,15 @@ def train_BC(venv, expert_transitions, steps, net_arch, policy_save_path):
     """
     Train BC on expert data.
     """
-    print(th.finfo(th.float32).max)
     bc_trainer = bc.BC(
         observation_space=venv.observation_space,
         action_space=venv.action_space,
         demonstrations=expert_transitions,
-        batch_size=64,
+        batch_size=512,
         policy=CustomFeedForwardPolicy(
             observation_space=venv.observation_space,
             action_space=venv.action_space,
-            net_arch=net_arch,
+            net_arch=[4096,2048,256,32],
             lr_schedule=bc.ConstantLRSchedule(lr=1e-4),
         )
     )
