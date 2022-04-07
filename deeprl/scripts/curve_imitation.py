@@ -11,7 +11,7 @@ from imitation.data.types import Trajectory
 from imitation.data import rollout
 from imitation.algorithms import bc
 from imitation.algorithms.adversarial import gail
-from stable_baselines3 import DDPG,
+from stable_baselines3 import DDPG
 from stable_baselines3.common.noise import OrnsteinUhlenbeckActionNoise
 
 # needs to be imported to register the custom environments
