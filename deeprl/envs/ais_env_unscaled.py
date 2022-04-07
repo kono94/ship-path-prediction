@@ -44,7 +44,7 @@ def resample_and_interpolate(
 class AISenv(core.Env):
     def __init__(
         self,
-        dataset="data/processed/aishub_linear_artificial_tanker.csv",
+        dataset="data/processed/aishub_linear_artificial_big_ships.csv",
         time_interval=10,
     ):
         # Trajectory ID column 'traj_id'
@@ -73,13 +73,6 @@ class AISenv(core.Env):
             self.df["speed"].min(),
             self.df["speed"].max(),
         )
-        self.DLON = self.MAX_LON - self.MIN_LON
-        self.DLAT = self.MAX_LAT - self.MIN_LAT
-        self.DCOURSE = self.MAX_COURSE - self.MIN_COURSE
-        self.DTEMPO = self.MAX_TEMPO - self.MIN_TEMPO
-        self.DHEADING = self.MAX_CURRENT_HEADING - self.MIN_CURRENT_HEADING
-        self.DSPEED = self.MAX_CURRENT_SPEED - self.MIN_CURRENT_SPEED
-
         # Observations: lat, lon, cog, sog
         low = np.array(
             [
@@ -122,30 +115,6 @@ class AISenv(core.Env):
         self.action_space = spaces.Box(low=low, high=high)
         # Custom variables
         self.step_counter = 0
-        self.scale = np.array(
-            [1 / self.DLAT, 1 / self.DLON, 1 / self.DHEADING, 1 / self.DSPEED]
-        )
-        self.shift = np.array(
-            [
-                self.MIN_LAT,
-                self.MIN_LON,
-                self.MIN_CURRENT_HEADING,
-                self.MIN_CURRENT_SPEED,
-            ]
-        )
-
-        self.scale_action = np.array(
-            [1 / self.DCOURSE, 1 / self.DTEMPO, 1 / self.DHEADING, 1 / self.DSPEED]
-        )
-        self.shift_action = np.array(
-            [
-                self.MIN_COURSE,
-                self.MIN_TEMPO,
-                self.MIN_CURRENT_HEADING,
-                self.MIN_CURRENT_SPEED,
-            ]
-        )
-
         self.training = True
         self.trajectory_index = -1
         self.figure = None
@@ -176,7 +145,7 @@ class AISenv(core.Env):
         self.state = self[self.step_counter]
         self.true_traj = np.expand_dims(self.state[:2], 0)
         self.agent_traj = np.expand_dims(self.state[:2], 0)
-        return self.scale * (self.state - self.shift)
+        return self.state
 
     def _calculate_course_tempo(self, prev_state, next_state):
         geodesic = pyproj.Geod(ellps="WGS84")
@@ -204,8 +173,7 @@ class AISenv(core.Env):
         action = self.scale_action * (
             np.array([course, tempo, next_obs[2], next_obs[3]]) - self.shift_action
         )
-        last_obs = self.scale * (last_obs - self.shift)
-        self.next_obs = self.scale * (self.state - self.shift)
+        self.next_obs = self.state
         done = bool(self.step_counter >= self.length_episode - 1)
 
         return last_obs, action, {}, done
@@ -214,13 +182,7 @@ class AISenv(core.Env):
         # Read current agent state and agent's action
         lat_agent, lon_agent = self.agent_traj[-1][0:2]
         # print(f'lat_a: {lat_agent} lon_a: {lon_agent}')
-        course, tempo, heading, speed = map(lambda x: np.clip(x, 0, 1), action)
-        # The agent's outputs need to be tranformed back to original scale
-        course = self.MIN_COURSE + self.DCOURSE * course
-        tempo = self.MIN_TEMPO + self.DTEMPO * tempo
-        heading = self.MIN_CURRENT_HEADING + self.DHEADING * heading
-        speed = self.MIN_CURRENT_SPEED + self.DSPEED * speed
-        # artificial speed is in meters per second
+        course, tempo, heading, speed = action
         d = distance(meters=tempo * self.time_interval_secs * self.time_multipler)
         # Agent's suggestion of state update
         # d = distance(kilometers = sog_a * KNOTS_TO_KMH * self.time_interval_secs * self.time_multipler / 3600)
@@ -254,10 +216,8 @@ class AISenv(core.Env):
         # is the end of trajectory reached?
         done = bool(self.step_counter >= self.length_episode - 1)
         # The agent's networks need normalized observations
-        observation = self.scale * (
-            np.array([lat_pred, lon_pred, heading, speed]) - self.shift
-        )
-        return observation, reward, done, {"distance_in_meters": geo_dist_meters}
+        observation = np.array([lat_pred, lon_pred, heading, speed])
+        return observation, reward, done, [geo_dist_meters]
 
     def render(self, mode="human", svg=None):
         if self.figure is None:
@@ -297,6 +257,6 @@ class AISenv(core.Env):
 
 
 register(
-    id="ais-v0",
+    id="ais-unscaled-v0",
     entry_point="deeprl.envs.ais_env:AISenv",
 )

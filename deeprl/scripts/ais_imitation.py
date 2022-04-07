@@ -9,6 +9,7 @@ import numpy as np
 import stable_baselines3 as sb3
 from tqdm import tqdm
 import pandas as pd
+import time
 import imitation.util.util as ut
 from imitation.data.types import Trajectory
 from imitation.data import rollout
@@ -16,11 +17,15 @@ from imitation.algorithms import bc
 from imitation.rewards import reward_nets
 from imitation.algorithms.adversarial import gail
 from statistics import mean
+from stable_baselines3 import DDPG
+from stable_baselines3.common.noise import OrnsteinUhlenbeckActionNoise
+from stable_baselines3.common.vec_env import VecNormalize, DummyVecEnv
 import ast
 
 # needs to be imported to register the custom environments
 import deeprl.envs.curve
 import deeprl.envs.ais_env
+import deeprl.envs.ais_env_unscaled
 
 os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 print(torch.cuda.is_available())
@@ -52,7 +57,6 @@ def policy_in_action(env, policy, evalution_path, render):
     obs = env.reset()
     cum_reward = 0
     t = 0
-
     for i in tqdm(range(0, n_trajs - start_index - 1)):
         # for i in tqdm(range(0, 2)):
         done = False
@@ -73,7 +77,7 @@ def policy_in_action(env, policy, evalution_path, render):
 
         if render:
             # save as svg = f'DOUBLE_{OUTPUT}_mean_distance={int(mean(distances))}'
-            env.render(mode="human", svg=f"{i}_mean_distance={int(mean(distances))}")
+            env.render(mode="human", svg=None)
         obs = env.reset()
         df = df.append(
             {
@@ -90,7 +94,6 @@ def policy_in_action(env, policy, evalution_path, render):
 
         cum_reward = 0
         t = 0
-
     df.to_csv(evalution_path)
 
 
@@ -183,7 +186,32 @@ def train_GAIL(venv, expert_transitions, steps, net_arch, policy_save_path):
     print(
         gail_trainer.gen_algo.predict([0.26154423, 0.9519157, 0.32064462, 0.00668896])
     )
-    # th.save(gail_trainer.policy, policy_save_path)
+    # torch.save(gail_trainer.policy, policy_save_path)
+
+
+def train_DDPG(venv, seed, steps, net_arch, policy_save_path):
+    n_actions = venv.action_space.shape[-1]
+    action_noise = OrnsteinUhlenbeckActionNoise(
+        mean=np.ones(n_actions), sigma=0.05 * np.ones(n_actions)
+    )
+
+    policy_kwargs = dict(net_arch=dict(pi=net_arch, qf=net_arch))
+
+    model = DDPG(
+        "MlpPolicy",
+        venv,
+        action_noise=action_noise,
+        buffer_size=5000000,
+        verbose=1,
+        seed=seed,
+        gamma=0.9999,
+        tau=1e-3,
+        learning_rate=1e-4,
+        batch_size=128,
+        policy_kwargs=policy_kwargs,
+    )
+    model.learn(total_timesteps=steps, log_interval=1)
+    model.save(policy_save_path)
 
 
 if __name__ == "__main__":
@@ -266,6 +294,15 @@ if __name__ == "__main__":
                 network_structure,
                 args.policy_path,
             )
+        elif args.algo == "ddpg":
+            env = VecNormalize(venv, norm_obs=True, norm_reward=False)
+            train_DDPG(
+                venv,
+                args.seed,
+                args.training_steps,
+                [400, 300],
+                args.policy_path,
+            )
         else:
             print("Unknown algorithm provided by --algo")
             sys.exit(2)
@@ -284,5 +321,14 @@ if __name__ == "__main__":
             )
         elif args.algo == "gail":
             policy = sb3.PPO.load(f"{args.policy_path}.zip")
-            # th.load(f'{args.policy_path}.zip', device='auto')
+            # torch.load(f'{args.policy_path}.zip', device='auto')
             policy_in_action(env, policy, args.evaluation_path, args.render)
+        elif args.algo == "ddpg":
+            venv = ut.make_vec_env(args.env, n_envs=1)
+            env = VecNormalize(venv, norm_obs=True, norm_reward=False)
+            policy_in_action(
+                env,
+                DDPG.load(args.policy_path, env=env),
+                args.evaluation_path,
+                args.render,
+            )
