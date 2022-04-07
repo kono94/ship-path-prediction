@@ -1,11 +1,11 @@
 #!/bin/bash
 source ./setup.sh
 
-EXPERIMENT_ID=tanker_speed_1secs
+EXPERIMENT_ID=big_ships_speed_10secs_NEW_APPROACH
 ALGO=bc
 ENV=ais-v0
 TRAIN_STEPS=7
-STRUCTURE="4096,2048,256,32"
+STRUCTURE="[8,16,32,16,8]"
 EXPERT_PATH=data/expert_trajectories/$EXPERIMENT_ID-ais_expert_trajectories.pickle
 
 ## SAMPLE EXPERT TRAJECTORIES (USUALLY ONCE)
@@ -24,12 +24,12 @@ do
         ## TRAIN ON EXPERT SAMPLES
 
         python ./deeprl/scripts/ais_imitation.py --mode train --algo $ALGO --env $ENV \
-                --training_steps $TRAIN_STEPS --hidden1 0 --hidden2 0 \
-                --policy_path $POLICY_SAVE --expert_samples_path $EXPERT_PATH --seed $SEED
+                --training_steps $TRAIN_STEPS --network $STRUCTURE \
+              --policy_path $POLICY_SAVE --expert_samples_path $EXPERT_PATH --seed $SEED
 
         ## TEST THE TRAINED POLICY
         python ./deeprl/scripts/ais_imitation.py --mode test --env  $ENV --algo $ALGO --policy_path  $POLICY_SAVE  \
-                        --animation_delay 0.15 --evaluation_path $EVAL_PATH  #--render
+                       --animation_delay 0.15 --evaluation_path $EVAL_PATH  --render
 done
 
 

@@ -1,19 +1,13 @@
-from re import A
-from tkinter.constants import N
-from turtle import distance
-from typing import Tuple
 import gym
 import numpy as np
-from dtaidistance import dtw_ndim
-from statistics import mean
-
 import random
 import math
 import time
-
 import deeprl.common.util as util
-from scipy.stats import norm
 import collections
+from dtaidistance import dtw_ndim
+from typing import Tuple
+
 
 class Position:
     def __init__(self, x, y) -> None:
@@ -26,12 +20,12 @@ class Position:
             tuples.append((elem.x, elem.y))
 
         return tuples
-    
+
     def to_2dim_array(positions):
         l = list()
-        for i, elem in enumerate(positions):
+        for _, elem in enumerate(positions):
             l.append(np.array([elem.x, elem.y]))
-        
+
         return np.asarray(l)
 
 
@@ -83,24 +77,24 @@ class CurveBase(gym.Env):
 
         # Curves to be generated
         self.trajectories = {
-            #"circle": {
+            # "circle": {
             #     "starting_pos": (350, 100),
             #     "func": lambda t: 0.15 * t,
-          #  },
+            #  },
             "curve_A": {
-               "starting_pos": (10, 10),
-               "func": lambda t: math.sin(t / 4) + math.pi / 6,
+                "starting_pos": (10, 10),
+                "func": lambda t: math.sin(t / 4) + math.pi / 6,
             },
-           "curve_B": {
-               "starting_pos": (400, 20),
-               "func": lambda t: math.sin(t / 2) + math.pi * 0.6,
+            "curve_B": {
+                "starting_pos": (400, 20),
+                "func": lambda t: math.sin(t / 2) + math.pi * 0.6,
             },
             "curve_C": {
-                 "starting_pos": (20, 400),
-                 "func": lambda t: math.sin(t / 1.5) - math.pi / 6,
+                "starting_pos": (20, 400),
+                "func": lambda t: math.sin(t / 1.5) - math.pi / 6,
             },
         }
-        
+
         # for i in range(0):
         #     x = random.randint(19, 37)
         #     y = random.randint(7, 15)
@@ -188,9 +182,10 @@ class CurveBase(gym.Env):
         return next_pos
 
     def _expert_output(self, last_pos, heading, speed):
-        return self._normalize_state([last_pos.x, last_pos.y]), \
-               self._normalize_action([heading])
-               
+        return self._normalize_state([last_pos.x, last_pos.y]), self._normalize_action(
+            [heading]
+        )
+
     def step_expert(self):
         self.step_count += 1
         last_pos = self.true_traj[-1]
@@ -207,17 +202,25 @@ class CurveBase(gym.Env):
             or self.step_count > 1000
         )
 
-        norm_last_obs, norm_action = self._expert_output(last_pos, self.last_heading, self.last_speed, heading, speed)
+        norm_last_obs, norm_action = self._expert_output(
+            last_pos, self.last_heading, self.last_speed, heading, speed
+        )
 
         if done:
             # clip values to stay in observation space when leaving the world
             next_x_clipped = np.clip(next_pos.x, 0, self.height)
             next_y_clipped = np.clip(next_pos.y, 0, self.width)
-            self.final_obs,_ = self._expert_output(Position(next_x_clipped, next_y_clipped), self.last_heading, self.last_speed, heading, speed)
-            
+            self.final_obs, _ = self._expert_output(
+                Position(next_x_clipped, next_y_clipped),
+                self.last_heading,
+                self.last_speed,
+                heading,
+                speed,
+            )
+
         self.last_speed = speed
         self.last_heading = heading
-        
+
         return norm_last_obs, norm_action, {}, done
 
     def generate_heading(self, step_count):
@@ -230,8 +233,8 @@ class CurveBase(gym.Env):
         return self.speed
 
     def _calculate_reward(self, dist_to_path):
-        return max(1- (dist_to_path / 100), 0)
-        #return norm.pdf(dist_to_path, 0, 5) * 12.5331  # scale amplitude to 1
+        return max(1 - (dist_to_path / 100), 0)
+        # return norm.pdf(dist_to_path, 0, 5) * 12.5331  # scale amplitude to 1
 
     def _step_observation(self):
         raise NotImplementedError
@@ -281,7 +284,7 @@ class CurveBase(gym.Env):
 
         if done or reward < 0.001:
             reward = 0
-            
+
         self.recent_rewards.append(reward)
         self.agent_reward = reward
         self.distance = dist_to_path
@@ -293,8 +296,15 @@ class CurveBase(gym.Env):
         )
 
         if evaluate:
-            dtw_distance = dtw_ndim.distance(Position.to_2dim_array(self.agent_traj), Position.to_2dim_array( self.true_traj))
-            info = {'distance':dist_to_path, 'dtw':dtw_distance, 'name': self.current_generator_name}
+            dtw_distance = dtw_ndim.distance(
+                Position.to_2dim_array(self.agent_traj),
+                Position.to_2dim_array(self.true_traj),
+            )
+            info = {
+                "distance": dist_to_path,
+                "dtw": dtw_distance,
+                "name": self.current_generator_name,
+            }
         else:
             info = {}
 
@@ -311,11 +321,11 @@ class CurveBase(gym.Env):
         )
         self.current_generator_curve = current_generator["func"]
         # only used for expert trajectory generation
-        self.speed= self.min_speed
+        self.speed = self.min_speed
         self.heading = self.generate_heading(0)
         self.last_heading = self.heading
         self.last_speed = self.min_speed
-        
+
         self.agent_heading = self.heading
         self.agent_speed = self.speed
         self.recent_rewards = collections.deque(maxlen=10)
@@ -402,5 +412,4 @@ class CurveBase(gym.Env):
         x1 = x + r
         y1 = y + r
         return x0, y0, x1, y1
-
-
+    
