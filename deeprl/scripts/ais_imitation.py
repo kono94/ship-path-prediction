@@ -66,18 +66,20 @@ def policy_in_action(env, policy, evalution_path, render):
             obs, reward, done, info = env.step(action)
             distances.append(info["distance_in_meters"])
             cum_reward += reward
-            t += 1
-        # if render:
-        #      env.render(mode="human", svg="")
-        # if mean(distances) < 200 and t > 100:
+            t += 1 
+            #env.render(mode="human", svg=None)      
+        # if mean(distances) > 1000 and mean(distances) < 1200:
+        #     print(mean(distances))
+        #     env.render(mode="human", svg=None)
+        #      time.sleep(3)
         # np.save("deeprl/scripts/single_tanker_agent.npy", env.agent_traj)
         #  np.save("deeprl/scripts/single_tanker_true.npy", env.true_traj)
         #      sys.exit(1)
         global OUTPUT
 
-        if render:
+       # if render:
             # save as svg = f'DOUBLE_{OUTPUT}_mean_distance={int(mean(distances))}'
-            env.render(mode="human", svg=None)
+     #       env.render(mode="human", svg=None)
         obs = env.reset()
         df = df.append(
             {
@@ -131,8 +133,8 @@ def train_BC(venv, expert_transitions, steps, net_arch, policy_save_path):
     Train BC on expert data.
     """
     global OUTPUT
-    batch = 64
-    lr = 1e-6
+    batch = 256
+    lr = 1e-5
     OUTPUT = f"{OUTPUT}_batch={batch}_net={net_arch}_steps={steps}_lr={lr}"
     bc_trainer = bc.BC(
         observation_space=venv.observation_space,
@@ -148,11 +150,6 @@ def train_BC(venv, expert_transitions, steps, net_arch, policy_save_path):
     )
     bc_trainer.train(n_epochs=steps)
     bc_trainer.save_policy(policy_save_path)
-    # env = gym.make("ais-v0")
-
-
-#  policy_in_action(env, bc_trainer.policy, "", True)
-
 
 def train_GAIL(venv, expert_transitions, steps, net_arch, policy_save_path):
     """

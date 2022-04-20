@@ -9,7 +9,7 @@ import pyproj
 from geopy.distance import distance
 from gym import core, spaces
 from gym.envs.registration import register
-
+from statistics import mean, median, stdev
 
 KNOTS_TO_KMH = 1.852
 MS_TO_KNOTS = 1.94384
@@ -44,7 +44,7 @@ def resample_and_interpolate(
 class AISenv(core.Env):
     def __init__(
         self,
-        dataset="data/processed/aishub_linear_artificial_tanker.csv",
+        dataset="data/processed/aishub_linear_artificial_big_ships.csv",
         time_interval=10,
     ):
         # Trajectory ID column 'traj_id'
@@ -54,6 +54,14 @@ class AISenv(core.Env):
         self.num_trajectories = self.df.groupby("traj_id").count().shape[0]
         # tmp = list(self.df.groupby('traj_id'))
         self.trajectory_list = list(self.df.groupby("traj_id"))
+        # lens = list()
+        # for traj in self.trajectory_list:
+        #     metrs = list()
+        #     for sp in traj[1]["speed"]:
+        #         metrs.append(sp*10)
+        #     lens.append(sum(metrs))
+        # print(median(lens))
+        # print(stdev(lens))
         random.shuffle(self.trajectory_list)
         self.time_interval_secs = time_interval
         # define constants
@@ -73,12 +81,18 @@ class AISenv(core.Env):
             self.df["speed"].min(),
             self.df["speed"].max(),
         )
+        self.MIN_ANGLE_TO_DESTINATION, self.MAX_ANGLE_TO_DESTINATION = -180, 180
+        _, max_dist = self._calculate_angle_distance([self.MIN_LON, self.MIN_LAT], [self.MAX_LON, self.MAX_LAT])
+        self.MIN_DIST_TO_DESTINATION, self.MAX_DIST_TO_DESTINATION = 0, max_dist
+        
         self.DLON = self.MAX_LON - self.MIN_LON
         self.DLAT = self.MAX_LAT - self.MIN_LAT
         self.DCOURSE = self.MAX_COURSE - self.MIN_COURSE
         self.DTEMPO = self.MAX_TEMPO - self.MIN_TEMPO
         self.DHEADING = self.MAX_CURRENT_HEADING - self.MIN_CURRENT_HEADING
         self.DSPEED = self.MAX_CURRENT_SPEED - self.MIN_CURRENT_SPEED
+        self.DANGLE = self.MAX_ANGLE_TO_DESTINATION - self.MIN_ANGLE_TO_DESTINATION
+        self.DDIST = self.MAX_DIST_TO_DESTINATION - self.MIN_DIST_TO_DESTINATION
 
         # Observations: lat, lon, cog, sog
         low = np.array(
@@ -87,6 +101,8 @@ class AISenv(core.Env):
                 self.MIN_LON,
                 self.MIN_CURRENT_HEADING,
                 self.MIN_CURRENT_SPEED,
+                self.MIN_ANGLE_TO_DESTINATION,
+                self.MIN_DIST_TO_DESTINATION
             ],
             dtype=np.float32,
         )
@@ -96,6 +112,8 @@ class AISenv(core.Env):
                 self.MAX_LON,
                 self.MAX_CURRENT_HEADING,
                 self.MAX_CURRENT_SPEED,
+                self.MAX_ANGLE_TO_DESTINATION,
+                self.MAX_DIST_TO_DESTINATION
             ],
             dtype=np.float32,
         )
@@ -123,7 +141,7 @@ class AISenv(core.Env):
         # Custom variables
         self.step_counter = 0
         self.scale = np.array(
-            [1 / self.DLAT, 1 / self.DLON, 1 / self.DHEADING, 1 / self.DSPEED]
+            [1 / self.DLAT, 1 / self.DLON, 1 / self.DHEADING, 1 / self.DSPEED, 1 / self.DANGLE, 1 / self.DDIST]
         )
         self.shift = np.array(
             [
@@ -131,6 +149,8 @@ class AISenv(core.Env):
                 self.MIN_LON,
                 self.MIN_CURRENT_HEADING,
                 self.MIN_CURRENT_SPEED,
+                self.MIN_ANGLE_TO_DESTINATION,
+                self.MIN_DIST_TO_DESTINATION
             ]
         )
 
@@ -142,7 +162,7 @@ class AISenv(core.Env):
                 self.MIN_COURSE,
                 self.MIN_TEMPO,
                 self.MIN_CURRENT_HEADING,
-                self.MIN_CURRENT_SPEED,
+                self.MIN_CURRENT_SPEED
             ]
         )
 
@@ -162,7 +182,9 @@ class AISenv(core.Env):
         self.trajectory_index = index
 
     def __getitem__(self, i):
-        return self.episode_df.iloc[i, :].values
+        values = self.episode_df.iloc[i, :].values
+        angle, dist = self._calculate_angle_distance(values[:2], self.final_pos)
+        return np.append(values, [[angle], [dist]])
 
     def reset(self):
         self.step_counter = 0
@@ -173,6 +195,7 @@ class AISenv(core.Env):
         self.episode_df = self.trajectory_list[self.trajectory_index][1]
         self.episode_df = self.episode_df[["lat", "lon", "direction", "speed"]]
         self.length_episode = self.episode_df.shape[0]
+        self.final_pos = self.episode_df.iloc[-1, :].values[:2]
         self.state = self[self.step_counter]
         self.true_traj = np.expand_dims(self.state[:2], 0)
         self.agent_traj = np.expand_dims(self.state[:2], 0)
@@ -188,6 +211,13 @@ class AISenv(core.Env):
         tempo = distance / (self.time_interval_secs * self.time_multipler)
         return course, tempo
 
+    def _calculate_angle_distance(self, agent, destination):
+        geodesic = pyproj.Geod(ellps="WGS84")
+        fwd_azimuth, back_azimuth, distance = geodesic.inv(
+            agent[1], agent[0], destination[1], destination[0]
+        )
+        return fwd_azimuth, distance
+        
     def step_expert(self):
         last_obs = self.state
         self.step_counter = np.clip(
@@ -251,12 +281,17 @@ class AISenv(core.Env):
         self.true_traj = np.concatenate(
             (self.true_traj, np.array([[lat_true, lon_true]])), axis=0
         )
+        angle, dist = self._calculate_angle_distance([lat_pred, lon_pred], self.final_pos)
         # is the end of trajectory reached?
-        done = bool(self.step_counter >= self.length_episode - 1)
+        done = self.step_counter >= self.length_episode - 1 or dist < 50
+
         # The agent's networks need normalized observations
+
+        #print([lat_pred, lon_pred, heading, speed, angle, dist])
         observation = self.scale * (
-            np.array([lat_pred, lon_pred, heading, speed]) - self.shift
+            np.array([lat_pred, lon_pred, heading, speed, angle, dist]) - self.shift
         )
+
         return observation, reward, done, {"distance_in_meters": geo_dist_meters}
 
     def render(self, mode="human", svg=None):
@@ -288,8 +323,8 @@ class AISenv(core.Env):
         plt.xlim([self.MIN_LON, self.MAX_LON])
         plt.ylim([self.MIN_LAT, self.MAX_LAT])
         plt.draw()
-        plt.pause(0.0001)
-        time.sleep(0.02)
+        plt.pause(0.00003)
+        time.sleep(0.002)
         # Save output as .svg
         if svg is not None:
             plt.pause(0.3)
