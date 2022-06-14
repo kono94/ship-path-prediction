@@ -23,9 +23,7 @@ from stable_baselines3.common.vec_env import VecNormalize, DummyVecEnv
 import ast
 
 # needs to be imported to register the custom environments
-import deeprl.envs.curve
-import deeprl.envs.ais_env
-import deeprl.envs.ais_env_unscaled
+import ais_env
 
 os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 print(torch.cuda.is_available())
@@ -192,31 +190,6 @@ def train_GAIL(venv, expert_transitions, steps, net_arch, policy_save_path):
     # torch.save(gail_trainer.policy, policy_save_path)
 
 
-def train_DDPG(venv, seed, steps, net_arch, policy_save_path):
-    n_actions = venv.action_space.shape[-1]
-    action_noise = OrnsteinUhlenbeckActionNoise(
-        mean=np.ones(n_actions), sigma=0.05 * np.ones(n_actions)
-    )
-
-    policy_kwargs = dict(net_arch=dict(pi=net_arch, qf=net_arch))
-
-    model = DDPG(
-        "MlpPolicy",
-        venv,
-        action_noise=action_noise,
-        buffer_size=5000000,
-        verbose=1,
-        seed=seed,
-        gamma=0.9999,
-        tau=1e-3,
-        learning_rate=1e-4,
-        batch_size=128,
-        policy_kwargs=policy_kwargs,
-    )
-    model.learn(total_timesteps=steps, log_interval=1)
-    model.save(policy_save_path)
-
-
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(
@@ -297,15 +270,6 @@ if __name__ == "__main__":
                 network_structure,
                 args.policy_path,
             )
-        elif args.algo == "ddpg":
-            env = VecNormalize(venv, norm_obs=True, norm_reward=False)
-            train_DDPG(
-                venv,
-                args.seed,
-                args.training_steps,
-                [400, 300],
-                args.policy_path,
-            )
         else:
             print("Unknown algorithm provided by --algo")
             sys.exit(2)
@@ -326,12 +290,3 @@ if __name__ == "__main__":
             policy = sb3.PPO.load(f"{args.policy_path}.zip")
             # torch.load(f'{args.policy_path}.zip', device='auto')
             policy_in_action(env, policy, args.evaluation_path, args.render)
-        elif args.algo == "ddpg":
-            venv = ut.make_vec_env(args.env, n_envs=1)
-            env = VecNormalize(venv, norm_obs=True, norm_reward=False)
-            policy_in_action(
-                env,
-                DDPG.load(args.policy_path, env=env),
-                args.evaluation_path,
-                args.render,
-            )
