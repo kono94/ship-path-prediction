@@ -49,7 +49,7 @@ class AISenv(core.Env):
     ):
         # Trajectory ID column 'traj_id'
         print("loading in ais data...")
-        self.df = pd.read_csv(dataset)
+        self.df = pd.read_csv(dataset, dtype={'speed': np.float32, 'cog': np.float32})
         # self.df = resample_and_interpolate(self.df, "1S", "linear")
         self.num_trajectories = self.df.groupby("traj_id").count().shape[0]
         # tmp = list(self.df.groupby('traj_id'))
@@ -82,9 +82,11 @@ class AISenv(core.Env):
             self.df["speed"].max(),
         )
         self.MIN_ANGLE_TO_DESTINATION, self.MAX_ANGLE_TO_DESTINATION = -180, 180
-        _, max_dist = self._calculate_angle_distance([self.MIN_LON, self.MIN_LAT], [self.MAX_LON, self.MAX_LAT])
+        _, max_dist = self._calculate_angle_distance(
+            [self.MIN_LON, self.MIN_LAT], [self.MAX_LON, self.MAX_LAT]
+        )
         self.MIN_DIST_TO_DESTINATION, self.MAX_DIST_TO_DESTINATION = 0, max_dist
-        
+
         self.DLON = self.MAX_LON - self.MIN_LON
         self.DLAT = self.MAX_LAT - self.MIN_LAT
         self.DCOURSE = self.MAX_COURSE - self.MIN_COURSE
@@ -102,7 +104,7 @@ class AISenv(core.Env):
                 self.MIN_CURRENT_HEADING,
                 self.MIN_CURRENT_SPEED,
                 self.MIN_ANGLE_TO_DESTINATION,
-                self.MIN_DIST_TO_DESTINATION
+                self.MIN_DIST_TO_DESTINATION,
             ],
             dtype=np.float32,
         )
@@ -113,7 +115,7 @@ class AISenv(core.Env):
                 self.MAX_CURRENT_HEADING,
                 self.MAX_CURRENT_SPEED,
                 self.MAX_ANGLE_TO_DESTINATION,
-                self.MAX_DIST_TO_DESTINATION
+                self.MAX_DIST_TO_DESTINATION,
             ],
             dtype=np.float32,
         )
@@ -141,7 +143,14 @@ class AISenv(core.Env):
         # Custom variables
         self.step_counter = 0
         self.scale = np.array(
-            [1 / self.DLAT, 1 / self.DLON, 1 / self.DHEADING, 1 / self.DSPEED, 1 / self.DANGLE, 1 / self.DDIST]
+            [
+                1 / self.DLAT,
+                1 / self.DLON,
+                1 / self.DHEADING,
+                1 / self.DSPEED,
+                1 / self.DANGLE,
+                1 / self.DDIST,
+            ]
         )
         self.shift = np.array(
             [
@@ -150,7 +159,7 @@ class AISenv(core.Env):
                 self.MIN_CURRENT_HEADING,
                 self.MIN_CURRENT_SPEED,
                 self.MIN_ANGLE_TO_DESTINATION,
-                self.MIN_DIST_TO_DESTINATION
+                self.MIN_DIST_TO_DESTINATION,
             ]
         )
 
@@ -162,7 +171,7 @@ class AISenv(core.Env):
                 self.MIN_COURSE,
                 self.MIN_TEMPO,
                 self.MIN_CURRENT_HEADING,
-                self.MIN_CURRENT_SPEED
+                self.MIN_CURRENT_SPEED,
             ]
         )
 
@@ -217,7 +226,7 @@ class AISenv(core.Env):
             agent[1], agent[0], destination[1], destination[0]
         )
         return fwd_azimuth, distance
-        
+
     def step_expert(self):
         last_obs = self.state
         self.step_counter = np.clip(
@@ -281,34 +290,44 @@ class AISenv(core.Env):
         self.true_traj = np.concatenate(
             (self.true_traj, np.array([[lat_true, lon_true]])), axis=0
         )
-        angle, dist = self._calculate_angle_distance([lat_pred, lon_pred], self.final_pos)
+        angle, dist = self._calculate_angle_distance(
+            [lat_pred, lon_pred], self.final_pos
+        )
         # is the end of trajectory reached?
         done = self.step_counter >= self.length_episode - 1 or dist < 50
 
         # The agent's networks need normalized observations
 
-        #print([lat_pred, lon_pred, heading, speed, angle, dist])
+        # print([lat_pred, lon_pred, heading, speed, angle, dist])
         observation = self.scale * (
             np.array([lat_pred, lon_pred, heading, speed, angle, dist]) - self.shift
         )
 
         return observation, reward, done, {"distance_in_meters": geo_dist_meters}
 
-    def render(self, mode="human", svg=None):
+    def render(self, mode="human", svg=None, agent_traj=None, true_traj=None):
+        
+        if agent_traj is not None and true_traj is not None:
+            t = true_traj
+            a = agent_traj
+        else:
+            t = self.true_traj
+            a = self.agent_traj
+            
         if self.figure is None:
             plt.ion()
             self.figure = 1
         plt.clf()
         plt.plot(
-            self.true_traj[:, 1],
-            self.true_traj[:, 0],
+            t[:, 1],
+            t[:, 0],
             zorder=2,
             linewidth=3,
             color="black",
         )
         plt.plot(
-            self.agent_traj[:, 1],
-            self.agent_traj[:, 0],
+            a[:, 1],
+            a[:, 0],
             zorder=3,
             alpha=0.6,
             linewidth=3,
@@ -323,7 +342,7 @@ class AISenv(core.Env):
         plt.xlim([self.MIN_LON, self.MAX_LON])
         plt.ylim([self.MIN_LAT, self.MAX_LAT])
         plt.draw()
-        plt.pause(0.00003)
+        plt.pause(0.003)
         time.sleep(0.002)
         # Save output as .svg
         if svg is not None:

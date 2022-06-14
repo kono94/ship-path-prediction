@@ -57,6 +57,7 @@ def policy_in_action(env, policy, evalution_path, render):
     obs = env.reset()
     cum_reward = 0
     t = 0
+    saved_tracks = []
     for i in tqdm(range(0, n_trajs - start_index - 1)):
         # for i in tqdm(range(0, 2)):
         done = False
@@ -67,16 +68,17 @@ def policy_in_action(env, policy, evalution_path, render):
             distances.append(info["distance_in_meters"])
             cum_reward += reward
             t += 1 
-            #env.render(mode="human", svg=None)      
-        # if mean(distances) > 1000 and mean(distances) < 1200:
-        #     print(mean(distances))
-        #     env.render(mode="human", svg=None)
-        #      time.sleep(3)
-        # np.save("deeprl/scripts/single_tanker_agent.npy", env.agent_traj)
-        #  np.save("deeprl/scripts/single_tanker_true.npy", env.true_traj)
+           # env.render(mode="human", svg=None)      
+        #if mean(distances) > 1500 and t > 100:
+        #    print(mean(distances))
+            #env.render(mode="human", svg=f'{mean(distances)}_{i}')
+            #time.sleep(3)
+            #np.save(f'deeprl/scripts/improved_{i}_agent.npy', env.agent_traj)
+            #np.save(f'deeprl/scripts/improved_{i}_true.npy', env.true_traj)
+      #     saved_tracks.append((env.agent_traj, env.true_traj))
         #      sys.exit(1)
         global OUTPUT
-
+            
        # if render:
             # save as svg = f'DOUBLE_{OUTPUT}_mean_distance={int(mean(distances))}'
      #       env.render(mode="human", svg=None)
@@ -96,6 +98,10 @@ def policy_in_action(env, policy, evalution_path, render):
 
         cum_reward = 0
         t = 0
+    #print(saved_tracks)
+   # for s in saved_tracks:
+   #     for i in range(0, len(s[0])):
+   #         env.render("human", None, s[0][:i], s[1][:i])
     df.to_csv(evalution_path)
 
 
@@ -133,8 +139,8 @@ def train_BC(venv, expert_transitions, steps, net_arch, policy_save_path):
     Train BC on expert data.
     """
     global OUTPUT
-    batch = 256
-    lr = 1e-5
+    batch = 32
+    lr = 5e-5
     OUTPUT = f"{OUTPUT}_batch={batch}_net={net_arch}_steps={steps}_lr={lr}"
     bc_trainer = bc.BC(
         observation_space=venv.observation_space,

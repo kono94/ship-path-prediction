@@ -1,15 +1,15 @@
 #!/bin/bash
 source ./setup.sh
 
-EXPERIMENT_ID=big_ships_S3_10secs
+EXPERIMENT_ID=coll_big_ships_S3_10secs_NEW_APPROACH
 ALGO=bc
 ENV=ais-v0
-TRAIN_STEPS=100
-STRUCTURE="[256,128,64]"
+TRAIN_STEPS=30
+STRUCTURE="[64,64]"
 EXPERT_PATH=data/expert_trajectories/$EXPERIMENT_ID-ais_expert_trajectories.pickle
 
 ## SAMPLE EXPERT TRAJECTORIES (USUALLY ONCE)
-#python ./deeprl/scripts/ais_imitation.py --mode sample --expert_samples_path $EXPERT_PATH
+python ./deeprl/scripts/ais_imitation.py --mode sample --expert_samples_path $EXPERT_PATH
 
 #6 7 8 9
 SEEDS=(5)
