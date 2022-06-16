@@ -15,32 +15,6 @@ KNOTS_TO_KMH = 1.852
 MS_TO_KNOTS = 1.94384
 
 
-# Optional, to do resampling on the fly without explicitly generating a new dataset. This is not recommended!
-def resample_and_interpolate(
-    trips, resample_interval="5S", interpolate_method="linear"
-):
-    out = pd.DataFrame()
-    grp = trips.groupby(["traj_id"])
-    for traj_id in list(trips.groupby(["traj_id"]).groups.keys()):
-        tmp = grp.get_group(traj_id)
-        tmp["time"] = pd.to_datetime(tmp["timestamp"])
-        tmp = tmp.set_index("time")
-        tmp.set_index("timestamp")
-        tmp = tmp.resample(resample_interval, origin="end").mean()
-        tmp["mmsi"] = tmp["mmsi"].interpolate(method="bfill")
-        tmp["sog"] = tmp["sog"].interpolate(method=interpolate_method)
-        tmp["cog"] = tmp["cog"].interpolate(method=interpolate_method)
-        tmp["lat"] = tmp["lat"].interpolate(method=interpolate_method)
-        tmp["lon"] = tmp["lon"].interpolate(method=interpolate_method)
-        tmp["heading"] = tmp["heading"].interpolate(method=interpolate_method)
-        tmp["speed"] = tmp["speed"].interpolate(method=interpolate_method)
-        tmp["direction"] = tmp["direction"].interpolate(method=interpolate_method)
-        tmp["traj_id"] = str(tmp["mmsi"][0]) + str(tmp.iloc[0].name)
-        out = out.append(tmp, ignore_index=True)
-
-    return out
-
-
 class AISenv(core.Env):
     def __init__(
         self,
@@ -50,21 +24,15 @@ class AISenv(core.Env):
         # Trajectory ID column 'traj_id'
         print("loading in ais data...")
         self.df = pd.read_csv(dataset, dtype={'speed': np.float32, 'cog': np.float32})
-        # self.df = resample_and_interpolate(self.df, "1S", "linear")
         self.num_trajectories = self.df.groupby("traj_id").count().shape[0]
-        # tmp = list(self.df.groupby('traj_id'))
         self.trajectory_list = list(self.df.groupby("traj_id"))
-        # lens = list()
-        # for traj in self.trajectory_list:
-        #     metrs = list()
-        #     for sp in traj[1]["speed"]:
-        #         metrs.append(sp*10)
-        #     lens.append(sum(metrs))
-        # print(median(lens))
-        # print(stdev(lens))
         random.shuffle(self.trajectory_list)
         self.time_interval_secs = time_interval
-        # define constants
+        
+        #################################################
+        ##            DEFINE CONSTANTS                 ##
+        #################################################
+        
         # State boundaries
         self.MIN_LON, self.MAX_LON = self.df["lon"].min(), self.df["lon"].max()
         self.MIN_LAT, self.MAX_LAT = self.df["lat"].min(), self.df["lat"].max()
@@ -96,7 +64,7 @@ class AISenv(core.Env):
         self.DANGLE = self.MAX_ANGLE_TO_DESTINATION - self.MIN_ANGLE_TO_DESTINATION
         self.DDIST = self.MAX_DIST_TO_DESTINATION - self.MIN_DIST_TO_DESTINATION
 
-        # Observations: lat, lon, cog, sog
+        # Observations: lat, lon, heading, speed, angle, distance to destination
         low = np.array(
             [
                 self.MIN_LAT,
@@ -120,7 +88,8 @@ class AISenv(core.Env):
             dtype=np.float32,
         )
         self.observation_space = spaces.Box(low=low, high=high, dtype=np.float32)
-        # Actions: cog, sog
+        
+        # Actions: course, tempo, next position heading, next position speed
         low = np.array(
             [
                 self.MIN_COURSE,
@@ -140,6 +109,7 @@ class AISenv(core.Env):
             dtype=np.float32,
         )
         self.action_space = spaces.Box(low=low, high=high)
+        
         # Custom variables
         self.step_counter = 0
         self.scale = np.array(
@@ -317,6 +287,7 @@ class AISenv(core.Env):
         if self.figure is None:
             plt.ion()
             self.figure = 1
+            
         plt.clf()
         plt.plot(
             t[:, 1],
