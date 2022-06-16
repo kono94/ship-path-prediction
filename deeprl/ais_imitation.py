@@ -23,7 +23,11 @@ from stable_baselines3.common.vec_env import VecNormalize, DummyVecEnv
 import ast
 
 # needs to be imported to register the custom environments
-import ais_env
+from gym.envs.registration import register
+register(
+    id="ais-v0",
+    entry_point="deeprl.ais_env:AISenv",
+)
 
 os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 print(torch.cuda.is_available())
@@ -66,7 +70,7 @@ def policy_in_action(env, policy, evalution_path, render):
             distances.append(info["distance_in_meters"])
             cum_reward += reward
             t += 1 
-           # env.render(mode="human", svg=None)      
+            env.render(mode="human", svg=None)      
         #if mean(distances) > 1500 and t > 100:
         #    print(mean(distances))
             #env.render(mode="human", svg=f'{mean(distances)}_{i}')
@@ -100,7 +104,7 @@ def policy_in_action(env, policy, evalution_path, render):
    # for s in saved_tracks:
    #     for i in range(0, len(s[0])):
    #         env.render("human", None, s[0][:i], s[1][:i])
-    df.to_csv(evalution_path)
+   # df.to_csv(evalution_path)
 
 
 def sample_expert_demonstrations(sample_env, expert_samples_path):
@@ -241,6 +245,7 @@ if __name__ == "__main__":
         sys.exit(2)
 
     if args.mode == "sample":
+        print("kkadkadk")
         sample_expert_demonstrations(gym.make(args.env), args.expert_samples_path)
         sys.exit(0)
 

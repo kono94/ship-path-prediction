@@ -1,3 +1,4 @@
+from matplotlib import projections
 import numpy as np
 import pandas as pd
 import geopy
@@ -8,7 +9,6 @@ import matplotlib.patches as mpatches
 import pyproj
 from geopy.distance import distance
 from gym import core, spaces
-from gym.envs.registration import register
 from statistics import mean, median, stdev
 
 KNOTS_TO_KMH = 1.852
@@ -44,7 +44,7 @@ def resample_and_interpolate(
 class AISenv(core.Env):
     def __init__(
         self,
-        dataset="data/processed/aishub_linear_artificial_big_ships.csv",
+        dataset="data/processed/aishub_linear_artificial_big_ships_no_passenger.csv",
         time_interval=10,
     ):
         # Trajectory ID column 'traj_id'
@@ -183,6 +183,7 @@ class AISenv(core.Env):
         # curve that the agent took
         self.agent_traj = None
         self.time_multipler = 1
+        print(self.MIN_LON, self.MAX_LON, self.MIN_LAT, self.MAX_LAT)
 
     def get_trajectory_count(self):
         return len(self.trajectory_list)
@@ -317,15 +318,24 @@ class AISenv(core.Env):
         if self.figure is None:
             plt.ion()
             self.figure = 1
-        plt.clf()
-        plt.plot(
+            self.img = plt.imread("deeprl/bg.png")
+            self.figure, self.ax = plt.subplots()
+            self.ax.imshow(self.img, extent=[self.MIN_LON, self.MAX_LON, self.MIN_LAT, self.MAX_LAT], aspect="equal")
+            #self.figure = 1
+
+        if hasattr(self, 'aLine'):
+            self.ax.lines.pop(0)
+            self.ax.lines.pop(0)
+        
+        
+        self.tLine = self.ax.plot(
             t[:, 1],
             t[:, 0],
             zorder=2,
             linewidth=3,
             color="black",
         )
-        plt.plot(
+        self.aLine = self.ax.plot(
             a[:, 1],
             a[:, 0],
             zorder=3,
@@ -333,7 +343,7 @@ class AISenv(core.Env):
             linewidth=3,
             color="red",
         )
-        plt.legend(
+        self.ax.legend(
             handles=[
                 mpatches.Patch(color="black", label="Ground-Truth"),
                 mpatches.Patch(color="red", label="Agent"),
@@ -342,15 +352,11 @@ class AISenv(core.Env):
         plt.xlim([self.MIN_LON, self.MAX_LON])
         plt.ylim([self.MIN_LAT, self.MAX_LAT])
         plt.draw()
-        plt.pause(0.003)
-        time.sleep(0.002)
+        plt.pause(0.0003)
+        time.sleep(0.0002)
         # Save output as .svg
         if svg is not None:
-            plt.pause(0.3)
-            plt.savefig(f"{svg}.svg", format="svg")
+            self.ax.pause(0.3)
+            self.ax.savefig(f"{svg}.svg", format="svg")
 
 
-register(
-    id="ais-v0",
-    entry_point="deeprl.envs.ais_env:AISenv",
-)
