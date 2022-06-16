@@ -2,19 +2,10 @@
 import pandas as pd
 import movingpandas as mpd
 import glob
-import os, json, sys
-import numpy as np
-import matplotlib.pyplot as plt
-import plotly.express as px
-import numpy as np
-from datetime import datetime
-import folium
-from folium import plugins
-from folium.features import DivIcon
+import os
 import geopandas
-from datetime import datetime, timedelta
+from datetime import timedelta
 from tqdm import tqdm
-from shapely.geometry import Polygon
 
 def resample_and_interpolate(trips, resample_interval="5S", interpolate_method="linear"):
     out = pd.DataFrame()
@@ -38,57 +29,59 @@ def resample_and_interpolate(trips, resample_interval="5S", interpolate_method="
     return out
 
 months = ["01", "04", "07", "10"]
-for month in months:
-    path_to_json = f'data/ais-hub/2020_{month}'
+#for year in ["2020", "2021"]:
+for year in ["2021"]:
+    for month in tqdm(months):
+        path_to_json = f'data/ais-hub/{year}_{month}'
 
-    json_pattern = os.path.join(path_to_json,'*.json')
-    file_list = glob.glob(json_pattern)
+        json_pattern = os.path.join(path_to_json,'*.json')
+        file_list = glob.glob(json_pattern)
 
-    dfs = [] # an empty list to store the data frames
-    for file in tqdm(file_list):
-        data = pd.read_json(file, lines=True) # read data frame from json file
-        data['absolute-time'] = pd.json_normalize(data['meta-data'])['absolute-time']
-        dfs.append(data) # append the data frame to the list
+        dfs = [] # an empty list to store the data frames
+        print("loading in files...")
+        for file in file_list:
+            print(file)
+            data = pd.read_json(file, lines=True) # read data frame from json file
+            data['absolute-time'] = pd.json_normalize(data['meta-data'])['absolute-time']
+            dfs.append(data) # append the data frame to the list
+        
+        temp = pd.concat(dfs, ignore_index=True) # concatenate all the data frames in the list.
 
-    temp = pd.concat(dfs, ignore_index=True) # concatenate all the data frames in the list.
+        df = temp[['longitude', 'latitude', 'absolute-time', 'source-mmsi', 'speed-over-ground',  'course-over-ground', \
+                'true-heading', 'type' ]]
+        df = df.dropna()
+        df = df.rename(columns={'longitude': 'lon', 'latitude': 'lat', 'absolute-time': 'timestamp', 'source-mmsi': 'mmsi',\
+            'speed-over-ground': 'sog', 'course-over-ground': 'cog',\
+            'true-heading': 'heading'})
 
-    df = temp[['longitude', 'latitude', 'absolute-time', 'source-mmsi', 'speed-over-ground',  'course-over-ground', \
-            'true-heading', 'type' ]]
-    df = df.dropna()
-    df = df.rename(columns={'longitude': 'lon', 'latitude': 'lat', 'absolute-time': 'timestamp', 'source-mmsi': 'mmsi',\
-        'speed-over-ground': 'sog', 'course-over-ground': 'cog',\
-        'true-heading': 'heading'})
+        df = df[df.sog>3]
+        df = df[(df.lon<180) | (df.lat<90)]
 
-    df = df[df.sog>3]
-    df = df[(df.lon<180) | (df.lat<90)]
+        df = df[df.sog<=30]
 
-    df = df[df.sog<=30]
+        # convert to GeoDataFrame
+        gdf = geopandas.GeoDataFrame(
+            df, geometry=geopandas.points_from_xy(x=df.lon, y=df.lat), crs="WGS84"
+        )
+        gdf['time'] = pd.to_datetime(gdf['timestamp'], unit='ms')
+        gdf = gdf.set_index('time')
 
-    # convert to GeoDataFrame
-    gdf = geopandas.GeoDataFrame(
-        df, geometry=geopandas.points_from_xy(x=df.lon, y=df.lat), crs="WGS84"
-    )
-    gdf['time'] = pd.to_datetime(gdf['timestamp'], unit='ms')
-    gdf = gdf.set_index('time')
+        # Specify minimum length for a trajectory (in meters)
+        minimum_length = 1500 
+        collection = mpd.TrajectoryCollection(gdf, 'mmsi', min_length=minimum_length)
 
-    # Specify minimum length for a trajectory (in meters)
-    minimum_length = 1500 
-    collection = mpd.TrajectoryCollection(gdf, 'mmsi', min_length=minimum_length)
+        collection.add_speed(overwrite=True)
+        collection.add_direction(overwrite=True)
 
-    collection.add_speed(overwrite=True)
-    collection.add_direction(overwrite=True)
-
-    # Remove Trajectories that have too long gaps in consecutive AIS signals
-    trips = mpd.ObservationGapSplitter(collection).split(gap=timedelta(minutes=5))
-    # Remove all anchoring chips with a tolerance of 15 diameter (for example the Tugs laying in the "Schlepperhafen")
-    trips = mpd.StopSplitter(trips).split(max_diameter=15, min_duration=timedelta(minutes=3), min_length=1500)
-    # Outlier detecting and cleaning (Outlier (interquantile range - iqr) based cleaner.)
-    # From moving pandas: "Note: Setting alpha=3 is widely used."
-    trips = mpd.OutlierCleaner(trips).clean({'speed': 3})
-
-    linear_out = resample_and_interpolate(trips, resample_interval='10S', interpolate_method='linear')
-    linear_out
-
-    linear_out.to_csv(f'data/processed/aishub_linear_artificial_{month}.csv', index=False)
+        # Remove Trajectories that have too long gaps in consecutive AIS signals
+        trips = mpd.ObservationGapSplitter(collection).split(gap=timedelta(minutes=5))
+        # Remove all anchoring chips with a tolerance of 15 diameter (for example the Tugs laying in the "Schlepperhafen")
+        trips = mpd.StopSplitter(trips).split(max_diameter=15, min_duration=timedelta(minutes=3), min_length=1500)
+        # Outlier detecting and cleaning (Outlier (interquantile range - iqr) based cleaner.)
+        # From moving pandas: "Note: Setting alpha=3 is widely used."
+        trips = mpd.OutlierCleaner(trips).clean({'speed': 3})
+        print("start resampling...")
+        linear_out = resample_and_interpolate(trips, resample_interval='10S', interpolate_method='linear')
+        linear_out.to_csv(f'data/processed/aishub_linear_10S_{year}_{month}.csv', index=False)
 
 
