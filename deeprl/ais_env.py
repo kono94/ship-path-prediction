@@ -294,7 +294,7 @@ class AISenv(core.Env):
             [lat_pred, lon_pred], self.final_pos
         )
         # is the end of trajectory reached?
-        done = self.step_counter >= self.length_episode - 1 or dist < 50
+        done = self.step_counter >= self.length_episode - 1 or dist < 100
 
         # The agent's networks need normalized observations
 
