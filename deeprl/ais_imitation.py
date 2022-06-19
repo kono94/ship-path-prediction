@@ -31,7 +31,7 @@ register(
 
 os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 print(torch.cuda.is_available())
-TRAIN_SPLIT = 0.85
+TRAIN_SPLIT = 0.80
 
 
 def set_seed(seed):
@@ -70,15 +70,17 @@ def policy_in_action(env, policy, evalution_path, render):
             distances.append(info["distance_in_meters"])
             cum_reward += reward
             t += 1 
-            env.render(mode="human", svg=None)      
-        #if mean(distances) > 1500 and t > 100:
-        #    print(mean(distances))
-            #env.render(mode="human", svg=f'{mean(distances)}_{i}')
+            #env.render(mode="human", svg=None)      
+        if mean(distances) < 450 and t > 120:
+            #env.render(mode="human", svg=None)
             #time.sleep(3)
             #np.save(f'deeprl/scripts/improved_{i}_agent.npy', env.agent_traj)
             #np.save(f'deeprl/scripts/improved_{i}_true.npy', env.true_traj)
-      #     saved_tracks.append((env.agent_traj, env.true_traj))
-        #      sys.exit(1)
+            saved_tracks.append((env.agent_traj, env.true_traj))
+           # s = (env.agent_traj, env.true_traj)
+           # for i in range(0, len(s[0])):
+           #     env.render("human", None, s[0][:i], s[1][:i])
+        # #     sys.exit(1)
         global OUTPUT
             
        # if render:
@@ -101,10 +103,10 @@ def policy_in_action(env, policy, evalution_path, render):
         cum_reward = 0
         t = 0
     #print(saved_tracks)
-   # for s in saved_tracks:
-   #     for i in range(0, len(s[0])):
-   #         env.render("human", None, s[0][:i], s[1][:i])
-   # df.to_csv(evalution_path)
+    for s in saved_tracks:
+       for i in range(0, len(s[0])):
+            env.render("human", None, s[0][:i], s[1][:i])
+    df.to_csv(evalution_path)
 
 
 def sample_expert_demonstrations(sample_env, expert_samples_path):
@@ -129,6 +131,7 @@ def sample_expert_demonstrations(sample_env, expert_samples_path):
         trajectory_list.append(
             Trajectory(np.array(obs), np.array(actions), np.array(infos), terminal=True)
         )
+        random.shuffle(trajectory_list)
 
     with open(expert_samples_path, "wb") as handle:
         pickle.dump(rollout.flatten_trajectories(trajectory_list), handle)
@@ -141,8 +144,8 @@ def train_BC(venv, expert_transitions, steps, net_arch, policy_save_path):
     Train BC on expert data.
     """
     global OUTPUT
-    batch = 32
-    lr = 5e-5
+    batch = 64
+    lr = 1e-7
     OUTPUT = f"{OUTPUT}_batch={batch}_net={net_arch}_steps={steps}_lr={lr}"
     bc_trainer = bc.BC(
         observation_space=venv.observation_space,
@@ -256,7 +259,6 @@ if __name__ == "__main__":
             # demonstration.
             transitions = pickle.load(f)
         venv = ut.make_vec_env(args.env, n_envs=1)
-        print(len(transitions))
         # transform string representation of network architecture to python array instance
         network_structure = ast.literal_eval(args.network)
         if args.algo == "bc":

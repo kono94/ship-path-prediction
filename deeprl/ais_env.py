@@ -10,6 +10,8 @@ import pyproj
 from geopy.distance import distance
 from gym import core, spaces
 from statistics import mean, median, stdev
+from matplotlib.artist import Artist
+import datetime
 
 KNOTS_TO_KMH = 1.852
 MS_TO_KNOTS = 1.94384
@@ -18,17 +20,17 @@ MS_TO_KNOTS = 1.94384
 class AISenv(core.Env):
     def __init__(
         self,
-        dataset="data/processed/aishub_linear_artificial_big_ships_no_passenger.csv",
+        dataset="data/usable/aishub_linear_big_ships_2020_wind_tides_lengths.csv",
         time_interval=10,
     ):
         # Trajectory ID column 'traj_id'
         print("loading in ais data...")
-        self.df = pd.read_csv(dataset, dtype={'speed': np.float32, 'cog': np.float32})
+        self.df = pd.read_csv(dataset, dtype={'speed': np.float32, 'cog': np.float32, 'lat': np.float32, 'lon': np.float32, 'direction': np.float32})
         self.num_trajectories = self.df.groupby("traj_id").count().shape[0]
         self.trajectory_list = list(self.df.groupby("traj_id"))
         random.shuffle(self.trajectory_list)
         self.time_interval_secs = time_interval
-        
+        print(self.num_trajectories)
         #################################################
         ##            DEFINE CONSTANTS                 ##
         #################################################
@@ -49,11 +51,32 @@ class AISenv(core.Env):
             self.df["speed"].min(),
             self.df["speed"].max(),
         )
+        self.MIN_LENGTH, self.MAX_LENGTH = (
+            self.df["length"].min(),
+           self.df["length"].max(),
+       )
+        self.MIN_WIDTH, self.MAX_WIDTH = (
+            self.df["width"].min(),
+            self.df["width"].max(),
+       )
+        self.MIN_LEVEL, self.MAX_LEVEL = (
+            self.df["tide_level"].min(),
+            self.df["tide_level"].max(),
+        )
+        self.MIN_WINDFORCE, self.MAX_WINDFORCE = (
+            self.df["wind_force"].min(),
+            self.df["wind_force"].max(),
+        )
+        self.MIN_WINDDIRECTION, self.MAX_WINDDIRECTION = (
+            self.df["wind_direction"].min(),
+            self.df["wind_direction"].max(),
+        )
         self.MIN_ANGLE_TO_DESTINATION, self.MAX_ANGLE_TO_DESTINATION = -180, 180
         _, max_dist = self._calculate_angle_distance(
             [self.MIN_LON, self.MIN_LAT], [self.MAX_LON, self.MAX_LAT]
         )
         self.MIN_DIST_TO_DESTINATION, self.MAX_DIST_TO_DESTINATION = 0, max_dist
+        
 
         self.DLON = self.MAX_LON - self.MIN_LON
         self.DLAT = self.MAX_LAT - self.MIN_LAT
@@ -61,16 +84,26 @@ class AISenv(core.Env):
         self.DTEMPO = self.MAX_TEMPO - self.MIN_TEMPO
         self.DHEADING = self.MAX_CURRENT_HEADING - self.MIN_CURRENT_HEADING
         self.DSPEED = self.MAX_CURRENT_SPEED - self.MIN_CURRENT_SPEED
+        self.DLENGTH = self.MAX_LENGTH - self.MIN_LENGTH
+        self.DWIDTH = self.MAX_WIDTH - self.MIN_WIDTH
+        self.DLEVEL = self.MAX_LEVEL - self.MIN_LEVEL
+        self.DWINDFORCE = self.MAX_WINDFORCE - self.MIN_WINDFORCE
+        self.DWINDDIRECTION = self.MAX_WINDDIRECTION - self.MIN_WINDDIRECTION
         self.DANGLE = self.MAX_ANGLE_TO_DESTINATION - self.MIN_ANGLE_TO_DESTINATION
         self.DDIST = self.MAX_DIST_TO_DESTINATION - self.MIN_DIST_TO_DESTINATION
-
-        # Observations: lat, lon, heading, speed, angle, distance to destination
+        
+        # Observations: lat, lon, heading, speed, length of vessel, width of vessel, tide_level, angle, distance to destination
         low = np.array(
             [
                 self.MIN_LAT,
                 self.MIN_LON,
                 self.MIN_CURRENT_HEADING,
                 self.MIN_CURRENT_SPEED,
+               # self.MIN_LENGTH,
+               # self.MIN_WIDTH,
+                self.MIN_LEVEL,
+                self.MIN_WINDFORCE,
+                self.MIN_WINDDIRECTION,
                 self.MIN_ANGLE_TO_DESTINATION,
                 self.MIN_DIST_TO_DESTINATION,
             ],
@@ -82,6 +115,11 @@ class AISenv(core.Env):
                 self.MAX_LON,
                 self.MAX_CURRENT_HEADING,
                 self.MAX_CURRENT_SPEED,
+         #       self.MAX_LENGTH,
+          #      self.MAX_WIDTH,
+                self.MAX_LEVEL,
+                self.MAX_WINDFORCE,
+                self.MAX_WINDDIRECTION,
                 self.MAX_ANGLE_TO_DESTINATION,
                 self.MAX_DIST_TO_DESTINATION,
             ],
@@ -118,6 +156,11 @@ class AISenv(core.Env):
                 1 / self.DLON,
                 1 / self.DHEADING,
                 1 / self.DSPEED,
+           #     1 / self.DLENGTH,
+            #    1 / self.DWIDTH,
+                1 / self.DLEVEL,
+                1 / self.DWINDFORCE,
+                1 / self.DWINDDIRECTION,
                 1 / self.DANGLE,
                 1 / self.DDIST,
             ]
@@ -128,6 +171,11 @@ class AISenv(core.Env):
                 self.MIN_LON,
                 self.MIN_CURRENT_HEADING,
                 self.MIN_CURRENT_SPEED,
+           #     self.MIN_LENGTH,
+          #      self.MIN_WIDTH,
+                self.MIN_LEVEL,
+                self.MIN_WINDFORCE,
+                self.MIN_WINDDIRECTION,
                 self.MIN_ANGLE_TO_DESTINATION,
                 self.MIN_DIST_TO_DESTINATION,
             ]
@@ -173,7 +221,8 @@ class AISenv(core.Env):
             random.shuffle(self.trajectory_list)
             self.trajectory_index = 0
         self.episode_df = self.trajectory_list[self.trajectory_index][1]
-        self.episode_df = self.episode_df[["lat", "lon", "direction", "speed"]]
+        # , "length", "width" "tide_level"
+        self.episode_df = self.episode_df[["lat", "lon", "direction", "speed", "tide_level", "wind_force", "wind_direction"]]
         self.length_episode = self.episode_df.shape[0]
         self.final_pos = self.episode_df.iloc[-1, :].values[:2]
         self.state = self[self.step_counter]
@@ -252,6 +301,7 @@ class AISenv(core.Env):
         geo_dist_meters = geopy.distance.distance(
             (lat_pred, lon_pred), (lat_true, lon_true)
         ).meters
+        
         # rectified reward function based on distance between agent and GT position, alpha=8000
         reward = max(1 - (geo_dist_meters / 8000), 0)
         # Record predictions and observations of vessel location
@@ -265,13 +315,14 @@ class AISenv(core.Env):
             [lat_pred, lon_pred], self.final_pos
         )
         # is the end of trajectory reached?
-        done = self.step_counter >= self.length_episode - 1 or dist < 100
+        done = self.step_counter >= self.length_episode - 1 or dist < 300
 
         # The agent's networks need normalized observations
 
         # print([lat_pred, lon_pred, heading, speed, angle, dist])
         observation = self.scale * (
-            np.array([lat_pred, lon_pred, heading, speed, angle, dist]) - self.shift
+            # , self.state[4], self.state[5]
+            np.array([lat_pred, lon_pred, heading, speed, self.state[4], self.state[5], self.state[6], angle, dist]) - self.shift
         )
 
         return observation, reward, done, {"distance_in_meters": geo_dist_meters}
@@ -288,6 +339,7 @@ class AISenv(core.Env):
         if self.figure is None:
             plt.ion()
             self.figure = 1
+            print("read")
             self.img = plt.imread("deeprl/bg.png")
             self.figure, self.ax = plt.subplots()
             self.ax.imshow(self.img, extent=[self.MIN_LON, self.MAX_LON, self.MIN_LAT, self.MAX_LAT], aspect="equal")
@@ -296,7 +348,11 @@ class AISenv(core.Env):
         if hasattr(self, 'aLine'):
             self.ax.lines.pop(0)
             self.ax.lines.pop(0)
-        
+            self.ax.lines.pop(0)
+            self.ax.lines.pop(0)
+            Artist.remove(self.frame)
+            Artist.remove(self.frame2)
+            time.sleep(0.0005)
         
         self.tLine = self.ax.plot(
             t[:, 1],
@@ -313,16 +369,39 @@ class AISenv(core.Env):
             linewidth=3,
             color="red",
         )
+        self.ax.plot( 
+            a[-1:, 1],
+            a[-1:, 0],
+            marker="o",
+            zorder=3,
+            alpha=0.6,
+            markersize=6,
+            markeredgecolor="red",
+            markerfacecolor="red"
+            )
+        
+        self.ax.plot( 
+            t[-1:, 1],
+            t[-1:, 0], 
+            marker="o",
+            zorder=2,
+            markersize=6,
+            markeredgecolor="black",
+            markerfacecolor="black"
+            )
         self.ax.legend(
             handles=[
                 mpatches.Patch(color="black", label="Ground-Truth"),
                 mpatches.Patch(color="red", label="Agent"),
             ]
         )
+        self.frame = plt.text(1.10, 0.95, f'Time elasped: \n{str(datetime.timedelta(seconds= len(t) *10))}', ha='center', va='center', transform=self.ax.transAxes)
+        self.frame2 = plt.text(1.11, 0.85, f'Distance: {int(geopy.distance.distance((t[-1:, 1], t[-1:, 0]), (a[-1:, 1], a[-1:, 0])).meters)} m', ha='center', va='center', transform=self.ax.transAxes)
+
         plt.xlim([self.MIN_LON, self.MAX_LON])
         plt.ylim([self.MIN_LAT, self.MAX_LAT])
         plt.draw()
-        plt.pause(0.0003)
+        plt.pause(0.0005)
         time.sleep(0.0002)
         # Save output as .svg
         if svg is not None:
